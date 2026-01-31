@@ -1,7 +1,12 @@
 import Link from 'next/link'
 import React from 'react'
 
-export default function LiveIndexPage() {
+import { getMeUser } from '@/auth/getMeUser'
+
+export default async function LiveIndexPage() {
+  // Require authentication; redirect unauthenticated users to admin login
+  await getMeUser({ nullUserRedirect: '/admin?redirect=/Live' })
+
   return (
     <div className="flex h-full w-full items-center justify-center p-8">
       <div className="max-w-md space-y-6">

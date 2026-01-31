@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { Radio, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 
-export default function JoinSessionPage() {
+export function JoinSessionClient() {
   const [joinCode, setJoinCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -31,7 +31,7 @@ export default function JoinSessionPage() {
 
       // Check if session exists
       const response = await fetch(`/api/sessions/${joinCode.trim().toUpperCase()}/live`)
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           setError('Session not found. Please check the code and try again.')
@@ -43,7 +43,7 @@ export default function JoinSessionPage() {
       }
 
       const session = await response.json()
-      
+
       if (!session.isActive) {
         setError('This session has ended.')
         setLoading(false)
@@ -51,9 +51,12 @@ export default function JoinSessionPage() {
       }
 
       // Join the session
-      const joinResponse = await fetch(`/api/sessions/${joinCode.trim().toUpperCase()}/join`, {
-        method: 'POST',
-      })
+      const joinResponse = await fetch(
+        `/api/sessions/${joinCode.trim().toUpperCase()}/join`,
+        {
+          method: 'POST',
+        },
+      )
 
       if (!joinResponse.ok) {
         setError('Failed to join session. Please try again.')
@@ -61,7 +64,7 @@ export default function JoinSessionPage() {
         return
       }
 
-      // Redirect to session view (Phase 5 will implement this)
+      // Redirect to session view
       window.location.href = `/session/${joinCode.trim().toUpperCase()}`
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')

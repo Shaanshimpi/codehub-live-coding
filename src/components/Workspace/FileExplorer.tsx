@@ -19,7 +19,7 @@ interface File {
 interface Folder {
   id: string
   name: string
-  parent?: {
+  parentFolder?: {
     id: string
     name: string
   }
@@ -102,8 +102,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
     // Second pass: build tree
     folders.forEach((folder) => {
       const folderNode = folderMap.get(folder.id)!
-      if (folder.parent && typeof folder.parent === 'object') {
-        const parent = folderMap.get(folder.parent.id)
+      if (folder.parentFolder && typeof folder.parentFolder === 'object') {
+        const parent = folderMap.get(folder.parentFolder.id)
         if (parent) {
           parent.children = parent.children || []
           parent.children.push(folderNode)

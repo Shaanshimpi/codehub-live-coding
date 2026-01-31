@@ -51,15 +51,30 @@ export async function GET(
       languageSlug = session.language.slug || null
     }
 
-    // Return minimal data for efficient polling
-    return NextResponse.json({
-      code: session.currentCode || '',
+    // Calculate participant count from actual studentScratchpads array
+    const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
+    const participantCount = Object.keys(scratchpads).length
+
+    const currentCode = session.currentCode || ''
+    const responseData = {
+      code: currentCode,
       output: session.currentOutput || null,
       isActive: session.isActive,
       title: session.title,
       language: languageSlug,
-      participantCount: session.participantCount || 0,
+      participantCount,
+    }
+
+    console.log('📡 [API] Returning live session data:', { 
+      codeLength: responseData.code.length, 
+      codePreview: currentCode.substring(0, 50),
+      language: responseData.language,
+      participantCount: responseData.participantCount,
+      sessionId: session.id
     })
+
+    // Return minimal data for efficient polling
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error('Error fetching live code:', error)
     return NextResponse.json(

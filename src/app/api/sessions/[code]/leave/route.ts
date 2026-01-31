@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
+import { getMeUser } from '@/auth/getMeUser'
 
 /**
  * POST /api/sessions/[code]/leave
- * Leave a live session (decrements participant count)
+ * Leave a live session (removes student from studentScratchpads)
  * 
  * Returns: { success: boolean }
  */
@@ -20,6 +21,15 @@ export async function POST(
       return NextResponse.json(
         { error: 'Invalid join code format' },
         { status: 400 }
+      )
+    }
+
+    // Get authenticated user
+    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
       )
     }
 
@@ -43,20 +53,29 @@ export async function POST(
 
     const session = sessions.docs[0]
 
-    // Decrement participant count (minimum 0)
-    const newCount = Math.max(0, (session.participantCount || 0) - 1)
+    // Get student scratchpads
+    const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
+    
+    // Remove this student from scratchpads
+    if (scratchpads[user.id]) {
+      delete scratchpads[user.id]
 
-    await payload.update({
-      collection: 'live-sessions',
-      id: session.id,
-      data: {
-        participantCount: newCount,
-      },
-    })
+      // Update session with updated scratchpads
+      await payload.update({
+        collection: 'live-sessions',
+        id: session.id,
+        data: {
+          studentScratchpads: scratchpads,
+        },
+      })
+    }
+
+    // Calculate actual participant count from scratchpads
+    const participantCount = Object.keys(scratchpads).length
 
     return NextResponse.json({
       success: true,
-      participantCount: newCount,
+      participantCount,
     })
   } catch (error) {
     console.error('Error leaving session:', error)
@@ -66,4 +85,5 @@ export async function POST(
     )
   }
 }
+
 

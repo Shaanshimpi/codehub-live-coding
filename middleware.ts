@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 
 // Public routes that do NOT require auth
-const PUBLIC_PATHS = new Set<string>(['/'])
+const PUBLIC_PATHS = new Set<string>(['/', '/signup'])
 
 // Paths that should always be skipped by this middleware
 const SKIP_PREFIXES = [

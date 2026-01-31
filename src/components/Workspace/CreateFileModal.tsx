@@ -1,18 +1,15 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { X } from 'lucide-react'
 
 interface Folder {
   id: string
   name: string
-}
-
-interface Language {
-  id: string
-  name: string
-  slug: string
-  defaultCode?: string
+  parentFolder?: {
+    id: string
+    name?: string
+  }
 }
 
 interface CreateFileModalProps {
@@ -23,24 +20,46 @@ interface CreateFileModalProps {
 
 export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModalProps) {
   const [name, setName] = useState('')
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('')
   const [selectedFolder, setSelectedFolder] = useState<string>('')
-  const [languages, setLanguages] = useState<Language[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    // Fetch available languages
-    fetch('/api/languages?limit=100')
-      .then((res) => res.json())
-      .then((data) => {
-        setLanguages(data.docs || [])
-        if (data.docs && data.docs.length > 0) {
-          setSelectedLanguage(data.docs[0].id)
-        }
-      })
-      .catch(console.error)
-  }, [])
+  // Build hierarchical folder labels like: "C / intro / loops" with indentation in the dropdown
+  const folderById = React.useMemo(() => {
+    const map = new Map<string, Folder>()
+    folders.forEach((f) => map.set(f.id, f))
+    return map
+  }, [folders])
+
+  const getPathParts = React.useCallback(
+    (id: string) => {
+      const parts: string[] = []
+      const visited = new Set<string>()
+
+      let current: Folder | undefined = folderById.get(id)
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id)
+        parts.unshift(current.name)
+        const parentId = current.parentFolder?.id
+        current = parentId ? folderById.get(parentId) : undefined
+      }
+
+      return parts
+    },
+    [folderById],
+  )
+
+  const folderOptions = React.useMemo(() => {
+    const enriched = folders.map((f) => {
+      const parts = getPathParts(f.id)
+      const depth = Math.max(0, parts.length - 1)
+      const label = parts.join(' / ')
+      return { ...f, label, depth }
+    })
+
+    enriched.sort((a, b) => a.label.localeCompare(b.label))
+    return enriched
+  }, [folders, getPathParts])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,14 +67,12 @@ export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModal
       setError('File name is required')
       return
     }
-    // Language is optional for storage; it only affects initial default code
 
     setLoading(true)
     setError(null)
 
     try {
-      const selectedLang = languages.find((l) => l.id === selectedLanguage)
-      const defaultCode = selectedLang?.defaultCode || ''
+      const numericFolderId = selectedFolder ? Number(selectedFolder) : null
 
       const response = await fetch('/api/files', {
         method: 'POST',
@@ -64,8 +81,9 @@ export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModal
         },
         body: JSON.stringify({
           name: name.trim(),
-          content: defaultCode,
-          folder: selectedFolder || undefined,
+          content: '',
+          // Single-collection relationship expects the folder ID (or null)
+          folder: Number.isFinite(numericFolderId as any) ? numericFolderId : null,
           // user will be set by Payload based on auth
         }),
       })
@@ -114,22 +132,6 @@ export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModal
           </div>
 
           <div>
-            <label className="text-sm font-medium">Language</label>
-            <select
-              value={selectedLanguage}
-              onChange={(e) => setSelectedLanguage(e.target.value)}
-              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              disabled={loading}
-            >
-              {languages.map((lang) => (
-                <option key={lang.id} value={lang.id}>
-                  {lang.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
             <label className="text-sm font-medium">Folder (Optional)</label>
             <select
               value={selectedFolder}
@@ -138,9 +140,9 @@ export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModal
               disabled={loading}
             >
               <option value="">Root (No folder)</option>
-              {folders.map((folder) => (
+              {folderOptions.map((folder) => (
                 <option key={folder.id} value={folder.id}>
-                  {folder.name}
+                  {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
                 </option>
               ))}
             </select>

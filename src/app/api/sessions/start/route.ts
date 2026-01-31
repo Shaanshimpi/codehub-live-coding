@@ -2,22 +2,40 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { generateJoinCode } from '@/utilities/joinCode'
+import { getMeUser } from '@/auth/getMeUser'
 
 /**
  * POST /api/sessions/start
  * Creates a new live session with auto-generated unique join code
  * 
- * Body: { title: string, languageId?: string, trainerId: string }
+ * Body: { title: string, languageId?: string }
  * Returns: { joinCode: string, sessionId: string }
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { title, languageId, trainerId } = body
-
-    if (!title || !trainerId) {
+    // Authenticate user and verify trainer role
+    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    if (!user) {
       return NextResponse.json(
-        { error: 'Missing required fields: title, trainerId' },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
+    // Verify user is trainer or admin
+    if (user.role !== 'trainer' && user.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only trainers can create sessions' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const { title, languageId } = body
+
+    if (!title) {
+      return NextResponse.json(
+        { error: 'Missing required field: title' },
         { status: 400 }
       )
     }
@@ -50,13 +68,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create the session
+    // Create the session (use authenticated user as trainer)
     const session = await payload.create({
       collection: 'live-sessions',
       data: {
         joinCode,
         title,
-        trainer: trainerId,
+        trainer: user.id, // Use authenticated user's ID
         language: languageId || undefined,
         isActive: true,
         participantCount: 0,

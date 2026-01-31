@@ -4,7 +4,7 @@ export const Folders: CollectionConfig = {
   slug: 'folders',
   admin: {
     useAsTitle: 'name',
-    defaultColumns: ['name', 'user', 'parent', 'createdAt'],
+    defaultColumns: ['name', 'user', 'parentFolder', 'createdAt'],
     group: 'Workspace',
   },
   fields: [
@@ -24,7 +24,7 @@ export const Folders: CollectionConfig = {
       },
     },
     {
-      name: 'parent',
+      name: 'parentFolder',
       type: 'relationship',
       relationTo: 'folders',
       admin: {

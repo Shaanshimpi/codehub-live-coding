@@ -17,7 +17,7 @@ interface MeResponse {
   } | null
 }
 
-export default function TrainerStartPage() {
+export function TrainerStartClient() {
   const router = useRouter()
   const [title, setTitle] = useState('')
   const [languages, setLanguages] = useState<Language[]>([])
@@ -82,7 +82,6 @@ export default function TrainerStartPage() {
         body: JSON.stringify({
           title: title.trim(),
           languageId: languageId || undefined,
-          trainerId: me.id,
         }),
       })
 
@@ -112,7 +111,10 @@ export default function TrainerStartPage() {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border bg-card p-6 shadow-sm">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-lg border bg-card p-6 shadow-sm"
+      >
         <div>
           <label className="text-sm font-medium">Session Title</label>
           <input
@@ -176,5 +178,4 @@ export default function TrainerStartPage() {
     </div>
   )
 }
-
 

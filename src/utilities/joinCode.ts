@@ -24,3 +24,4 @@ export function isValidJoinCode(code: string): boolean {
   return pattern.test(code.toUpperCase())
 }
 
+

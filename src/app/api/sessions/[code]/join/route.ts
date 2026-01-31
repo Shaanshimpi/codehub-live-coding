@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
+import { getMeUser } from '@/auth/getMeUser'
 
 /**
  * POST /api/sessions/[code]/join
- * Join a live session (increments participant count)
+ * Join a live session (adds student to studentScratchpads)
  * 
  * Returns: { success: boolean, title: string, language: string }
  */
@@ -20,6 +21,15 @@ export async function POST(
       return NextResponse.json(
         { error: 'Invalid join code format' },
         { status: 400 }
+      )
+    }
+
+    // Get authenticated user
+    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
       )
     }
 
@@ -45,14 +55,30 @@ export async function POST(
 
     const session = sessions.docs[0]
 
-    // Increment participant count
-    await payload.update({
-      collection: 'live-sessions',
-      id: session.id,
-      data: {
-        participantCount: (session.participantCount || 0) + 1,
-      },
-    })
+    // Get or initialize student scratchpads
+    const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
+    
+    // Add student to scratchpads if not already there (idempotent)
+    if (!scratchpads[user.id]) {
+      scratchpads[user.id] = {
+        code: '',
+        language: 'javascript',
+        updatedAt: new Date().toISOString(),
+        studentName: user.name || user.email || 'Anonymous',
+      }
+
+      // Update session with new scratchpads (count will be calculated from this)
+      await payload.update({
+        collection: 'live-sessions',
+        id: session.id,
+        data: {
+          studentScratchpads: scratchpads,
+        },
+      })
+    }
+
+    // Calculate actual participant count from scratchpads
+    const participantCount = Object.keys(scratchpads).length
 
     // Get language name if available
     const languageName = typeof session.language === 'object' 
@@ -64,7 +90,7 @@ export async function POST(
       sessionId: session.id,
       title: session.title,
       language: languageName,
-      participantCount: (session.participantCount || 0) + 1,
+      participantCount,
     })
   } catch (error) {
     console.error('Error joining session:', error)
@@ -74,4 +100,5 @@ export async function POST(
     )
   }
 }
+
 

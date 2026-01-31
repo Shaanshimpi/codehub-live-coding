@@ -1,11 +1,31 @@
+'use client'
+
 import { Banner } from '@payloadcms/ui/elements/Banner'
-import React from 'react'
+import React, { useEffect } from 'react'
 
 import './index.scss'
 
 const baseClass = 'before-dashboard'
 
 const BeforeDashboard: React.FC = () => {
+  useEffect(() => {
+    try {
+      const redirect = sessionStorage.getItem('codehub:postLoginRedirect')
+      if (redirect && redirect.startsWith('/') && !redirect.startsWith('/admin')) {
+        sessionStorage.removeItem('codehub:postLoginRedirect')
+        // Use full navigation to leave the admin app cleanly
+        window.location.assign(redirect)
+      } else {
+        // Default redirect to home if no redirect is stored or if it's an admin path
+        sessionStorage.removeItem('codehub:postLoginRedirect')
+        window.location.assign('/')
+      }
+    } catch {
+      // If sessionStorage fails, still redirect to home
+      window.location.assign('/')
+    }
+  }, [])
+
   return (
     <div className={baseClass}>
       <Banner className={`${baseClass}__banner`} type="success">

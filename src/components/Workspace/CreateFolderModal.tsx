@@ -6,6 +6,10 @@ import { X } from 'lucide-react'
 interface FolderOption {
   id: string
   name: string
+  parentFolder?: {
+    id: string
+    name?: string
+  }
 }
 
 interface CreateFolderModalProps {
@@ -20,6 +24,44 @@ export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderM
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Build hierarchical labels like: "C / intro / loops" with indentation in the dropdown
+  const folderById = React.useMemo(() => {
+    const map = new Map<string, FolderOption>()
+    folders.forEach((f) => map.set(f.id, f))
+    return map
+  }, [folders])
+
+  const getPathParts = React.useCallback(
+    (id: string) => {
+      const parts: string[] = []
+      const visited = new Set<string>()
+
+      let current: FolderOption | undefined = folderById.get(id)
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id)
+        parts.unshift(current.name)
+        const parentId = current.parentFolder?.id
+        current = parentId ? folderById.get(parentId) : undefined
+      }
+
+      return parts
+    },
+    [folderById],
+  )
+
+  const folderOptions = React.useMemo(() => {
+    const enriched = folders.map((f) => {
+      const parts = getPathParts(f.id)
+      const depth = Math.max(0, parts.length - 1)
+      const label = parts.join(' / ')
+      return { ...f, label, depth }
+    })
+
+    // Sort by full path for a stable, readable list
+    enriched.sort((a, b) => a.label.localeCompare(b.label))
+    return enriched
+  }, [folders, getPathParts])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
@@ -31,22 +73,25 @@ export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderM
     setError(null)
 
     try {
-      // Get current user (you'll need to implement auth later)
-      // For now, we'll need to get user ID from session/cookie
+      const numericParentId = parentId ? Number(parentId) : null
+      const requestBody = {
+        name: name.trim(),
+        // Single-collection relationship expects the parent folder ID (or null)
+        parentFolder: Number.isFinite(numericParentId as any) ? numericParentId : null,
+        // user will be set by Payload based on auth
+      }
+
       const response = await fetch('/api/folders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: name.trim(),
-          parent: parentId || undefined,
-          // user will be set by Payload based on auth
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
-        const data = await response.json()
+        const data: any = await response.json().catch(() => ({}))
+        console.error('Failed to create folder', { status: response.status, data })
         if (response.status === 401 || response.status === 403) {
           throw new Error('Please log in to create folders')
         }
@@ -55,6 +100,7 @@ export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderM
 
       onSuccess()
     } catch (err) {
+      console.error('CreateFolderModal error', err)
       setError(err instanceof Error ? err.message : 'Failed to create folder')
     } finally {
       setLoading(false)
@@ -97,9 +143,9 @@ export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderM
               disabled={loading}
             >
               <option value="">Root (no parent)</option>
-              {folders.map((folder) => (
+              {folderOptions.map((folder) => (
                 <option key={folder.id} value={folder.id}>
-                  {folder.name}
+                  {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
                 </option>
               ))}
             </select>

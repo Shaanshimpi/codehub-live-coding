@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor, { useMonaco } from '@monaco-editor/react'
 import { Play, Square, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { LiveCodePlaygroundProps, SUPPORTED_LANGUAGES } from './types'
@@ -23,30 +23,64 @@ export function LiveCodePlayground({
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
+  const monaco = useMonaco()
+
+  // Update editor content when code prop changes
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.getValue() !== code) {
+      editorRef.current.setValue(code)
+    }
+  }, [code])
 
   const currentLanguage = SUPPORTED_LANGUAGES.find((lang) => lang.id === language)
   const monacoLanguage = currentLanguage?.monacoLanguage || 'javascript'
-
-  const handleEditorDidMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor) => {
-    editorRef.current = editor
-
-    // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
-    editor.addCommand(
-      // eslint-disable-next-line no-bitwise
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      () => {
-        if (!readOnly && !executing) {
-          handleRun()
-        }
-      },
-    )
-  }, [readOnly, executing])
 
   const handleRun = useCallback(() => {
     // Get current code from editor to avoid stale state
     const currentCode = editorRef.current?.getValue() || code
     onRun(currentCode, showInput ? input : undefined)
   }, [code, input, showInput, onRun])
+
+  const handleEditorDidMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor) => {
+    editorRef.current = editor
+
+    // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
+    if (monaco) {
+      editor.addCommand(
+        // eslint-disable-next-line no-bitwise
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+        () => {
+          if (!readOnly && !executing) {
+            handleRun()
+          }
+        },
+      )
+
+      // Disable copy/select when readOnly
+      if (readOnly) {
+        // Disable all copy shortcuts
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {})
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {})
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {}) // Cut
+      }
+    }
+    
+    // Disable copy/select when readOnly
+    if (readOnly) {
+      // Disable context menu (right-click copy)
+      const contextMenuHandler = () => {
+        // Prevent default context menu
+      }
+      editor.onContextMenu(contextMenuHandler)
+
+      // Disable text selection
+      editor.updateOptions({
+        readOnly: true,
+        selectOnLineNumbers: false,
+        selectionHighlight: false,
+      })
+    }
+  }, [readOnly, executing, handleRun, monaco])
 
   const handleStop = useCallback(() => {
     if (onStopExecution) {
@@ -157,7 +191,6 @@ export function LiveCodePlayground({
           height={height}
           language={monacoLanguage}
           defaultValue={code}
-          key={`${language}-${code.substring(0, 20)}`} // Re-mount only when language changes or default code changes significantly
           onChange={(value) => onChange(value || '')}
           onMount={handleEditorDidMount}
           theme={theme}
@@ -173,6 +206,11 @@ export function LiveCodePlayground({
             folding: true,
             quickSuggestions: !readOnly,
             suggestOnTriggerCharacters: !readOnly,
+            // Disable selection and copy when readOnly
+            selectOnLineNumbers: !readOnly,
+            selectionHighlight: !readOnly,
+            contextmenu: !readOnly, // Disable context menu when readOnly
+            copyWithSyntaxHighlighting: false, // Disable syntax highlighting in copy
           }}
         />
       </div>

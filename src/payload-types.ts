@@ -430,7 +430,7 @@ export interface User {
   /**
    * User role determines access permissions
    */
-  role: 'trainer' | 'student';
+  role: 'admin' | 'trainer' | 'student';
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -835,7 +835,7 @@ export interface LiveSession {
    */
   title: string;
   /**
-   * Trainer conducting this session
+   * Trainer conducting this session (can be trainer or admin)
    */
   trainer: number | User;
   /**
@@ -874,6 +874,18 @@ export interface LiveSession {
    * When the session ended
    */
   endedAt?: string | null;
+  /**
+   * Student scratchpad code (userId -> {code, language, updatedAt})
+   */
+  studentScratchpads?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -891,7 +903,7 @@ export interface Folder {
   /**
    * Parent folder (null = root level)
    */
-  parent?: (number | null) | Folder;
+  parentFolder?: (number | null) | Folder;
   updatedAt: string;
   createdAt: string;
 }
@@ -1537,6 +1549,7 @@ export interface LiveSessionsSelect<T extends boolean = true> {
   participantCount?: T;
   startedAt?: T;
   endedAt?: T;
+  studentScratchpads?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1547,7 +1560,7 @@ export interface LiveSessionsSelect<T extends boolean = true> {
 export interface FoldersSelect<T extends boolean = true> {
   name?: T;
   user?: T;
-  parent?: T;
+  parentFolder?: T;
   updatedAt?: T;
   createdAt?: T;
 }

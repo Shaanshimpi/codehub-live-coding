@@ -31,10 +31,11 @@ export const LiveSessions: CollectionConfig = {
       relationTo: 'users',
       required: true,
       filterOptions: {
-        role: { equals: 'trainer' },
+        // Allow both trainers and admins to be assigned as trainers
+        role: { in: ['trainer', 'admin'] },
       },
       admin: {
-        description: 'Trainer conducting this session',
+        description: 'Trainer conducting this session (can be trainer or admin)',
       },
     },
     {
@@ -98,6 +99,14 @@ export const LiveSessions: CollectionConfig = {
         },
         description: 'When the session ended',
         position: 'sidebar',
+      },
+    },
+    {
+      name: 'studentScratchpads',
+      type: 'json',
+      admin: {
+        description: 'Student scratchpad code (userId -> {code, language, updatedAt})',
+        hidden: true, // Hide from admin UI, managed via API
       },
     },
   ],
