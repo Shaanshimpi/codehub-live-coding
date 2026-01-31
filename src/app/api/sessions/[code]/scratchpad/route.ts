@@ -34,38 +34,7 @@ export async function POST(
       )
     }
 
-    // Parse request body with error handling
-    let body
-    try {
-      // Check if request has content
-      const contentType = request.headers.get('content-type')
-      if (!contentType || !contentType.includes('application/json')) {
-        return NextResponse.json(
-          { error: 'Content-Type must be application/json' },
-          { status: 400 }
-        )
-      }
-
-      // Try to parse JSON body
-      body = await request.json()
-    } catch (error) {
-      // Handle empty body or invalid JSON
-      if (error instanceof SyntaxError || error instanceof TypeError) {
-        return NextResponse.json(
-          { error: 'Invalid or empty request body' },
-          { status: 400 }
-        )
-      }
-      throw error // Re-throw unexpected errors
-    }
-
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json(
-        { error: 'Request body must be a JSON object' },
-        { status: 400 }
-      )
-    }
-
+    const body = await request.json()
     const { code: scratchpadCode, language, output, workspaceFileId } = body
 
     if (typeof scratchpadCode !== 'string' || typeof language !== 'string') {
@@ -99,11 +68,8 @@ export async function POST(
     // Get or initialize student scratchpads
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
     
-    // Update this student's scratchpad
-    const existingData = scratchpads[user.id] || {}
-    
     // Get workspace file name if workspaceFileId is provided
-    let workspaceFileName = existingData.workspaceFileName || null
+    let workspaceFileName = null
     if (workspaceFileId) {
       try {
         const file = await payload.findByID({
@@ -112,19 +78,17 @@ export async function POST(
         })
         workspaceFileName = file.name
       } catch {
-        // File might not exist, keep existing name or null
+        // File might not exist, keep null
       }
     }
     
+    // Update this student's scratchpad
     scratchpads[user.id] = {
-      ...existingData,
       code: scratchpadCode,
       language,
       updatedAt: new Date().toISOString(),
       studentName: user.name || user.email || 'Anonymous',
-      // Only update output if provided (preserve existing output if not)
       ...(output && { output }),
-      // Store workspace file ID and name if provided
       ...(workspaceFileId && { workspaceFileId, workspaceFileName }),
     }
 

@@ -55,26 +55,14 @@ export async function GET(
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
     const participantCount = Object.keys(scratchpads).length
 
-    const currentCode = session.currentCode || ''
-    const responseData = {
-      code: currentCode,
+    return NextResponse.json({
+      code: session.currentCode || '',
       output: session.currentOutput || null,
       isActive: session.isActive,
       title: session.title,
       language: languageSlug,
       participantCount,
-    }
-
-    console.log('📡 [API] Returning live session data:', { 
-      codeLength: responseData.code.length, 
-      codePreview: currentCode.substring(0, 50),
-      language: responseData.language,
-      participantCount: responseData.participantCount,
-      sessionId: session.id
     })
-
-    // Return minimal data for efficient polling
-    return NextResponse.json(responseData)
   } catch (error) {
     console.error('Error fetching live code:', error)
     return NextResponse.json(

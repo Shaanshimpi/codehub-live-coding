@@ -63,6 +63,7 @@ export function TrainerSessionClient() {
   }>>([])
   const [expandedStudentIds, setExpandedStudentIds] = useState<Set<string>>(new Set())
   const [refreshingStudents, setRefreshingStudents] = useState(false)
+  const [refreshStudentsSuccess, setRefreshStudentsSuccess] = useState(false)
 
   const loadInitial = useCallback(async () => {
     if (!joinCode) return
@@ -106,13 +107,15 @@ export function TrainerSessionClient() {
   const fetchStudents = useCallback(async () => {
     if (!joinCode) return
     setRefreshingStudents(true)
+    setRefreshStudentsSuccess(false)
     try {
       const res = await fetch(`/api/sessions/${joinCode}/students`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setStudents(data.students || [])
-        // Update participant count from actual students array
         setParticipantCount(data.students?.length || 0)
+        setRefreshStudentsSuccess(true)
+        setTimeout(() => setRefreshStudentsSuccess(false), 2000)
       }
     } catch (e) {
       console.error('Failed to fetch students:', e)
@@ -204,7 +207,6 @@ export function TrainerSessionClient() {
     if (!joinCode) return
     setSavingCode(true)
     setSaveSuccess(false)
-    console.log('💾 [Trainer] Saving code...', { joinCode, codeLength: code.length, language })
     try {
       const response = await fetch(`/api/sessions/${joinCode}/broadcast`, {
         method: 'POST',
@@ -217,18 +219,14 @@ export function TrainerSessionClient() {
         }),
       })
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ [Trainer] Failed to save code:', response.status, response.statusText, errorText)
         alert('Failed to save code')
       } else {
-        const data = await response.json()
         setLastUpdate(new Date())
         setSaveSuccess(true)
-        console.log('✅ [Trainer] Code saved successfully', data)
-        setTimeout(() => setSaveSuccess(false), 2000) // Hide success indicator after 2s
+        setTimeout(() => setSaveSuccess(false), 2000)
       }
     } catch (error) {
-      console.error('❌ [Trainer] Failed to save code:', error)
+      console.error('Failed to save code:', error)
       alert('Failed to save code')
     } finally {
       setSavingCode(false)
@@ -333,7 +331,13 @@ export function TrainerSessionClient() {
             <button
               onClick={fetchStudents}
               disabled={refreshingStudents}
-              className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors disabled:opacity-50"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                refreshStudentsSuccess 
+                  ? "bg-green-500/20 border-green-500 text-green-700 dark:text-green-400" 
+                  : "bg-background hover:bg-accent",
+                refreshingStudents && "opacity-50 cursor-not-allowed"
+              )}
               title="Refresh students list"
             >
               {refreshingStudents ? (
@@ -341,7 +345,7 @@ export function TrainerSessionClient() {
               ) : (
                 <RefreshCw className="h-3 w-3" />
               )}
-              <span>Refresh</span>
+              <span>{refreshStudentsSuccess ? 'Refreshed!' : 'Refresh'}</span>
             </button>
           </div>
           {students.length === 0 ? (

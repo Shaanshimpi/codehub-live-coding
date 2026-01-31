@@ -24,19 +24,12 @@ export async function POST(
       )
     }
 
-    // Only parse body after validating the join code to avoid 500s for obviously invalid requests
     const body = await request.json()
     const { currentCode, currentOutput, languageSlug } = body as {
       currentCode?: string
       currentOutput?: unknown
       languageSlug?: string
     }
-    
-    console.log('📥 [API] Broadcast request received:', { 
-      codeLength: typeof currentCode === 'string' ? currentCode.length : 0,
-      hasOutput: currentOutput !== undefined,
-      languageSlug 
-    })
 
     const payload = await getPayload({ config })
 
@@ -76,37 +69,19 @@ export async function POST(
     // Update code / output / language
     const updateData: any = {}
     if (typeof currentCode === 'string') {
-      const oldCode = session.currentCode || ''
       updateData.currentCode = currentCode
-      console.log('💾 [API] Updating trainer code:', { 
-        sessionId: session.id, 
-        oldCodeLength: oldCode.length,
-        newCodeLength: currentCode.length,
-        oldCodePreview: oldCode.substring(0, 50),
-        newCodePreview: currentCode.substring(0, 50),
-        codeChanged: oldCode !== currentCode
-      })
     }
     if (currentOutput !== undefined) {
       updateData.currentOutput = currentOutput
-      console.log('📊 [API] Updating trainer output')
     }
     if (languageId) {
       updateData.language = languageId
-      console.log('🔄 [API] Updating language:', languageId)
     }
 
-    const updatedSession = await payload.update({
+    await payload.update({
       collection: 'live-sessions',
       id: session.id,
       data: updateData,
-    })
-
-    console.log('✅ [API] Session updated successfully', { 
-      sessionId: session.id, 
-      updatedFields: Object.keys(updateData),
-      savedCodeLength: updatedSession.currentCode?.length || 0,
-      savedCodePreview: updatedSession.currentCode?.substring(0, 50) || ''
     })
 
     return NextResponse.json({

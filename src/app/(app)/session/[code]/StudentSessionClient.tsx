@@ -53,26 +53,6 @@ export function StudentSessionClient() {
 
   const joinCode = useMemo(() => normalizeCodeParam(params?.code), [params])
 
-  // Handle unhandled promise rejections (cancellation errors from Monaco Editor)
-  useEffect(() => {
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      const error = event.reason
-      // Ignore cancellation errors (common with Monaco Editor and React Strict Mode)
-      if (
-        error &&
-        typeof error === 'object' &&
-        ((error.type === 'cancelation') ||
-         (error.msg === 'operation is manually canceled'))
-      ) {
-        event.preventDefault()
-        return
-      }
-    }
-    window.addEventListener('unhandledrejection', handleUnhandledRejection)
-    return () => {
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
-    }
-  }, [])
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('trainer')
   const [hasNewTrainerUpdate, setHasNewTrainerUpdate] = useState(false)
@@ -110,68 +90,44 @@ export function StudentSessionClient() {
     if (!joinCode) return
 
     try {
-      console.log('📡 [Student] Fetching trainer code from API...', { joinCode })
       const res = await fetch(`/api/sessions/${joinCode}/live`, { cache: 'no-store' })
       if (!res.ok) {
-        console.error('❌ [Student] API response not OK:', res.status, res.statusText)
         setError(res.status === 404 ? 'Session not found.' : 'Failed to load session.')
         setLoading(false)
         return
       }
       const data = (await res.json()) as LiveSessionLiveResponse
-      console.log('📥 [Student] Received data:', { 
-        codeLength: data.code?.length || 0, 
-        language: data.language, 
-        hasOutput: !!data.output,
-        participantCount: data.participantCount 
-      })
 
       setSessionTitle(data.title || 'Live Session')
       setSessionActive(Boolean(data.isActive))
       setParticipantCount(Number(data.participantCount || 0))
 
-      // trainer language from session (optional)
       const nextTrainerLang = (data.language || 'javascript').toLowerCase()
       if (nextTrainerLang && nextTrainerLang !== trainerLanguage) {
-        console.log('🔄 [Student] Language changed:', trainerLanguage, '->', nextTrainerLang)
-        // This is display-only; Monaco language mapping is handled inside LiveCodePlayground
         setTrainerLanguage(nextTrainerLang)
       }
 
-      // Simply update with whatever the API returns - no comparison needed
-      const nextTrainerCode = data.code || ''
-      console.log('📥 [Student] Updating trainer code from API:', { codeLength: nextTrainerCode.length })
-      
-      setTrainerCode(nextTrainerCode)
+      // Update with whatever the API returns
+      setTrainerCode(data.code || '')
+      setTrainerOutput(mapOutputToExecutionResult(data.output))
       setLastUpdate(new Date())
       if (activeTab !== 'trainer') {
         setHasNewTrainerUpdate(true)
       }
 
-      const nextOut = mapOutputToExecutionResult(data.output)
-      // only update if changed-ish
-      if (JSON.stringify(nextOut) !== JSON.stringify(trainerOutput)) {
-        console.log('📊 [Student] Output updated')
-        setTrainerOutput(nextOut)
-        setLastUpdate(new Date())
-        if (activeTab !== 'trainer') setHasNewTrainerUpdate(true)
-      }
-
       setLoading(false)
       setError(null)
     } catch (e) {
-      // Ignore cancellation errors (common with React Strict Mode and Monaco Editor)
+      // Ignore cancellation errors
       if (e && typeof e === 'object' && 'type' in e && e.type === 'cancelation') {
         return
       }
-      // Only log non-cancellation errors
       if (!(e && typeof e === 'object' && 'msg' in e && e.msg === 'operation is manually canceled')) {
-        console.error('❌ [Student] Error fetching trainer code:', e)
         setError('Failed to load session.')
         setLoading(false)
       }
     }
-  }, [joinCode, activeTab, trainerCode, trainerOutput, trainerLanguage, fileSelectionComplete])
+  }, [joinCode, activeTab, trainerLanguage, fileSelectionComplete])
 
   // Join on mount; leave on unmount
   useEffect(() => {
@@ -203,14 +159,12 @@ export function StudentSessionClient() {
     if (!joinCode) return
     setRefreshingTrainerCode(true)
     setRefreshSuccess(false)
-    console.log('🔄 [Student] Refreshing trainer code...', { joinCode })
     try {
       await pollLive()
       setRefreshSuccess(true)
-      console.log('✅ [Student] Trainer code refreshed successfully')
-      setTimeout(() => setRefreshSuccess(false), 2000) // Hide success indicator after 2s
+      setTimeout(() => setRefreshSuccess(false), 2000)
     } catch (error) {
-      console.error('❌ [Student] Failed to refresh trainer code:', error)
+      console.error('Failed to refresh trainer code:', error)
     } finally {
       setRefreshingTrainerCode(false)
     }
@@ -381,74 +335,61 @@ export function StudentSessionClient() {
     return () => document.removeEventListener('click', handleClickOutside)
   }, [showFileDropdown])
 
-  // Sync scratchpad code to backend (debounced)
+  // Sync scratchpad code to backend
   const syncScratchpad = useCallback(async () => {
-    if (!joinCode || !fileSelectionComplete) return
-    // Only sync if we have valid code and language
-    if (typeof scratchpadCode !== 'string' || typeof scratchpadLanguage !== 'string') {
-      console.warn('⚠️ [Student] Cannot sync: invalid code or language')
-      return
+    if (!joinCode || !fileSelectionComplete) {
+      throw new Error('File selection not complete')
     }
-    try {
-      console.log('💾 [Student] Syncing scratchpad to session...', { joinCode, codeLength: scratchpadCode.length, language: scratchpadLanguage })
-      // Sync to session
-      const response = await fetch(`/api/sessions/${joinCode}/scratchpad`, {
-        method: 'POST',
+    if (typeof scratchpadCode !== 'string' || typeof scratchpadLanguage !== 'string') {
+      throw new Error('Invalid code or language')
+    }
+    
+    const response = await fetch(`/api/sessions/${joinCode}/scratchpad`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        code: scratchpadCode,
+        language: scratchpadLanguage,
+        workspaceFileId: workspaceFileId,
+      }),
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to sync: ${response.status} - ${errorText}`)
+    }
+
+    // Also sync to workspace file if using one
+    if (workspaceFileId) {
+      await fetch(`/api/files/${workspaceFileId}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          code: scratchpadCode,
-          language: scratchpadLanguage,
-          workspaceFileId: workspaceFileId,
+          content: scratchpadCode,
         }),
+      }).catch(() => {
+        // Silently fail - workspace sync is secondary
       })
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ [Student] Failed to sync scratchpad:', response.status, response.statusText, errorText)
-        throw new Error(`Failed to sync: ${response.status}`)
-      } else {
-        const data = await response.json()
-        console.log('✅ [Student] Scratchpad synced to session', data)
-      }
-
-      // Also sync to workspace file if using one
-      if (workspaceFileId) {
-        console.log('💾 [Student] Syncing to workspace file...', { workspaceFileId })
-        await fetch(`/api/files/${workspaceFileId}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            content: scratchpadCode,
-          }),
-        }).then(() => {
-          console.log('✅ [Student] Workspace file synced')
-        }).catch((err) => {
-          console.warn('⚠️ [Student] Workspace sync failed (non-critical):', err)
-        })
-      }
-    } catch (e) {
-      // Ignore cancellation errors (common with React Strict Mode)
-      if (e && typeof e === 'object' && 'type' in e && e.type === 'cancelation') {
-        return
-      }
-      // Only log non-cancellation errors
-      if (!(e && typeof e === 'object' && 'msg' in e && e.msg === 'operation is manually canceled')) {
-        console.error('❌ [Student] Failed to sync scratchpad:', e)
-        throw e // Re-throw to let handleSaveScratchpad handle it
-      }
     }
   }, [joinCode, scratchpadCode, scratchpadLanguage, workspaceFileId, fileSelectionComplete])
 
   // Manual save function for student scratchpad
   const [savingScratchpad, setSavingScratchpad] = useState(false)
+  const [saveScratchpadSuccess, setSaveScratchpadSuccess] = useState(false)
   const handleSaveScratchpad = useCallback(async () => {
     if (!joinCode || !fileSelectionComplete) return
     setSavingScratchpad(true)
+    setSaveScratchpadSuccess(false)
     try {
       await syncScratchpad()
+      setSaveScratchpadSuccess(true)
+      setTimeout(() => setSaveScratchpadSuccess(false), 2000)
+    } catch (error) {
+      console.error('Failed to save scratchpad:', error)
     } finally {
       setSavingScratchpad(false)
     }
@@ -756,11 +697,18 @@ export function StudentSessionClient() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleSaveScratchpad}
-                      disabled={savingScratchpad}
-                      className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors disabled:opacity-50"
+                      disabled={savingScratchpad || !fileSelectionComplete}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                        saveScratchpadSuccess 
+                          ? "bg-green-500/20 border-green-500 text-green-700 dark:text-green-400" 
+                          : "bg-background hover:bg-accent",
+                        (savingScratchpad || !fileSelectionComplete) && "opacity-50 cursor-not-allowed"
+                      )}
+                      title={!fileSelectionComplete ? "Please select a file first" : "Save your code"}
                     >
                       {savingScratchpad ? <Save className="h-3 w-3 animate-pulse" /> : <Save className="h-3 w-3" />}
-                      Save
+                      {saveScratchpadSuccess ? 'Saved!' : 'Save'}
                     </button>
                     <select
                       value={scratchpadLanguage}
