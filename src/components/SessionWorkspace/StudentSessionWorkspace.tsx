@@ -20,6 +20,23 @@ type WorkspaceFile = {
 
 type ActiveTab = 'trainer' | 'mycode'
 
+// Helper function to check if an error is a cancellation error (should be ignored)
+function isCancellationError(error: unknown): boolean {
+  // Check for standard AbortError from AbortController
+  if (error instanceof Error && error.name === 'AbortError') {
+    return true
+  }
+  if (error && typeof error === 'object') {
+    if ('type' in error && error.type === 'cancelation') {
+      return true
+    }
+    if ('msg' in error && error.msg === 'operation is manually canceled') {
+      return true
+    }
+  }
+  return false
+}
+
 interface StudentSessionWorkspaceProps {
   sessionCode: string
   sessionTitle: string
@@ -70,11 +87,14 @@ export function StudentSessionWorkspace({
    * Also: student must not call `/api/files/:id` for trainer files because that endpoint is
    * owner-protected and will 403 for non-owners.
    */
-  const fetchTrainerMeta = useCallback(async () => {
+  const fetchTrainerMeta = useCallback(async (signal?: AbortSignal) => {
     if (!sessionCode) return
 
     try {
-      const res = await fetch(`/api/sessions/${sessionCode}/live`, { cache: 'no-store' })
+      const res = await fetch(`/api/sessions/${sessionCode}/live`, { 
+        cache: 'no-store',
+        signal 
+      })
       if (!res.ok) return
 
       const data = await res.json()
@@ -107,6 +127,10 @@ export function StudentSessionWorkspace({
         setTrainerFile(null)
       }
     } catch (error) {
+      // Ignore cancellation errors (from AbortController or manual cancellation)
+      if (isCancellationError(error) || error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Failed to fetch trainer meta:', error)
     }
   }, [sessionCode])
@@ -161,6 +185,10 @@ export function StudentSessionWorkspace({
         setHasNewTrainerUpdate(true)
       }
     } catch (error) {
+      // Ignore cancellation errors (from AbortController or manual cancellation)
+      if (isCancellationError(error) || error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Failed to refresh trainer code:', error)
     } finally {
       setRefreshingTrainerCode(false)
@@ -169,14 +197,32 @@ export function StudentSessionWorkspace({
 
   // On mount, fetch just metadata so student can see trainer selected file name (without syncing code).
   useEffect(() => {
-    void fetchTrainerMeta()
+    const abortController = new AbortController()
+    
+    // Use .catch() to handle promise rejections (including cancellations)
+    fetchTrainerMeta(abortController.signal).catch((error) => {
+      if (isCancellationError(error) || error instanceof Error && error.name === 'AbortError') {
+        return // Silently ignore cancellation errors
+      }
+      console.error('Failed to fetch trainer meta:', error)
+    })
+    
+    // Cleanup: abort fetch if component unmounts or dependencies change
+    return () => {
+      abortController.abort()
+    }
   }, [fetchTrainerMeta])
 
   // Load student's active file from session on mount
   useEffect(() => {
+    const abortController = new AbortController()
+    
     const loadActiveFile = async () => {
       try {
-        const res = await fetch(`/api/sessions/${sessionCode}/live`, { cache: 'no-store' })
+        const res = await fetch(`/api/sessions/${sessionCode}/live`, { 
+          cache: 'no-store',
+          signal: abortController.signal 
+        })
         if (res.ok) {
           const data = await res.json()
           // Check if student has a saved workspace file in their scratchpad
@@ -187,12 +233,22 @@ export function StudentSessionWorkspace({
           }
         }
       } catch (error) {
+        // Ignore cancellation errors (from AbortController or manual cancellation)
+        if (isCancellationError(error) || error instanceof Error && error.name === 'AbortError') {
+          return
+        }
         console.error('Failed to load active file:', error)
         setShowFileModal(true)
       }
     }
+    
     loadActiveFile()
-  }, [sessionCode])
+    
+    // Cleanup: abort fetch if component unmounts or dependencies change
+    return () => {
+      abortController.abort()
+    }
+  }, [sessionCode, selectedFile])
 
   const saveCurrentFile = useCallback(async (): Promise<boolean> => {
     if (!selectedFile || !sessionCode) return false
