@@ -639,9 +639,23 @@ export function StudentSessionWorkspace({
                   />
                 </>
               ) : (
-                <div className="flex h-full items-center justify-center">
+                <div className="flex h-full flex-col items-center justify-center">
                   <div className="text-center space-y-4">
                     <p className="text-muted-foreground">Trainer hasn't selected a file yet</p>
+                    <button
+                      onClick={handleRefreshTrainerCode}
+                      disabled={refreshingTrainerCode || !sessionActive}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+                        refreshingTrainerCode || !sessionActive
+                          ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+                          : "bg-primary text-primary-foreground hover:bg-primary/90"
+                      )}
+                      title="Check if trainer has selected a file"
+                    >
+                      <RefreshCw className={cn("h-4 w-4", refreshingTrainerCode && "animate-spin")} />
+                      {refreshingTrainerCode ? 'Checking...' : 'Refresh'}
+                    </button>
                   </div>
                 </div>
               )}

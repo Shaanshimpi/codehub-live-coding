@@ -64,8 +64,8 @@ export function JoinSessionClient() {
         return
       }
 
-      // Redirect to session view
-      window.location.href = `/session/${joinCode.trim().toUpperCase()}`
+      // Redirect to new session view (with workspace integration)
+      window.location.href = `/student/session/${joinCode.trim().toUpperCase()}`
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
