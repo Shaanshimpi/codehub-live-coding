@@ -43,10 +43,10 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
     try {
       setLoading(true)
       
-      // Fetch folders and files using Payload API
+      // Fetch folders and files using workspace API
       const [foldersRes, filesRes] = await Promise.all([
         fetch('/api/folders?limit=1000&depth=2'),
-        fetch('/api/files?limit=1000&depth=2'),
+        fetch('/api/workspace/files', { credentials: 'include' }),
       ])
 
       if (foldersRes.ok) {
@@ -58,7 +58,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
 
       if (filesRes.ok) {
         const filesData = await filesRes.json()
-        setFiles(filesData.docs || [])
+        // /api/workspace/files returns { files: [...] } format
+        setFiles(filesData.files || filesData.docs || [])
       } else if (filesRes.status === 401 || filesRes.status === 403) {
         console.warn('Not authenticated - please log in to view workspace')
       }
@@ -79,6 +80,45 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
 
   const handleRefresh = () => {
     fetchData()
+  }
+
+  const handleFileDelete = async (fileId: string) => {
+    try {
+      const res = await fetch(`/api/files/${fileId}/delete`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (res.ok) {
+        fetchData()
+        if (onFileSaved) {
+          onFileSaved()
+        }
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      console.error('Failed to delete file:', error)
+      alert('Failed to delete file')
+    }
+  }
+
+  const handleFolderDelete = async (folderId: string) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}/delete`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (res.ok) {
+        fetchData()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to delete folder')
+      }
+    } catch (error) {
+      console.error('Failed to delete folder:', error)
+      alert('Failed to delete folder')
+    }
   }
 
   if (loading) {
@@ -119,7 +159,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
   }
 
   const folderTree = buildFolderTree(folders)
-  const rootFiles = files.filter((f) => !f.folder || typeof f.folder !== 'object')
+  // Filter root files - files without a folder (folder is undefined or null)
+  const rootFiles = files.filter((f) => !f.folder)
 
   return (
     <div className="flex h-full flex-col">
@@ -174,6 +215,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
                 files={files}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
+                onFileDelete={handleFileDelete}
+                onFolderDelete={handleFolderDelete}
                 level={0}
               />
             ))}
@@ -185,6 +228,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
                 file={file}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
+                onFileDelete={handleFileDelete}
+                onFolderDelete={handleFolderDelete}
                 level={0}
               />
             ))}

@@ -19,6 +19,8 @@ export function LiveCodePlayground({
   onStopExecution,
   height = '100%',
   theme = 'vs-dark',
+  runDisabled = false,
+  allowRunInReadOnly = false,
 }: LiveCodePlaygroundProps) {
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const [showInput, setShowInput] = useState(false)
@@ -36,25 +38,26 @@ export function LiveCodePlayground({
   const monacoLanguage = currentLanguage?.monacoLanguage || 'javascript'
 
   const handleRun = useCallback(() => {
+    if (runDisabled) return // Prevent running if disabled
     // Get current code from editor to avoid stale state
     const currentCode = editorRef.current?.getValue() || code
     onRun(currentCode, showInput ? input : undefined)
-  }, [code, input, showInput, onRun])
+  }, [code, input, showInput, onRun, runDisabled])
 
   const handleEditorDidMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor) => {
     editorRef.current = editor
 
-    // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
-    if (monaco) {
-      editor.addCommand(
-        // eslint-disable-next-line no-bitwise
-        monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-        () => {
-          if (!readOnly && !executing) {
-            handleRun()
-          }
-        },
-      )
+      // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
+      if (monaco) {
+        editor.addCommand(
+          // eslint-disable-next-line no-bitwise
+          monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+          () => {
+            if ((!readOnly || allowRunInReadOnly) && !executing && !runDisabled) {
+              handleRun()
+            }
+          },
+        )
 
       // Disable copy/select when readOnly
       if (readOnly) {
@@ -143,17 +146,25 @@ export function LiveCodePlayground({
           )}
 
           {/* Run / Stop Button */}
-          {!readOnly && (
+          {(!readOnly || allowRunInReadOnly) && (
             <button
               type="button"
               onClick={executing ? handleStop : handleRun}
-              disabled={executing && !onStopExecution}
+              disabled={(executing && !onStopExecution) || runDisabled}
               className={`flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
                 executing
                   ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
-                  : 'bg-success text-background hover:bg-success/90'
+                  : runDisabled
+                    ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                    : 'bg-success text-background hover:bg-success/90'
               }`}
-              title={executing ? 'Stop execution' : 'Run code (Ctrl+Enter)'}
+              title={
+                executing
+                  ? 'Stop execution'
+                  : runDisabled
+                    ? 'Please save your code before running'
+                    : 'Run code (Ctrl+Enter)'
+              }
             >
               {executing ? (
                 <>
@@ -180,7 +191,7 @@ export function LiveCodePlayground({
             placeholder="Enter program input (stdin)..."
             className="w-full resize-none rounded-md border bg-background px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring"
             rows={3}
-            disabled={readOnly}
+            disabled={readOnly && !allowRunInReadOnly}
           />
         </div>
       )}

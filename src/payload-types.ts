@@ -886,6 +886,14 @@ export interface LiveSession {
     | number
     | boolean
     | null;
+  /**
+   * Currently active workspace file ID for trainer
+   */
+  trainerWorkspaceFileId?: string | null;
+  /**
+   * Currently active workspace file name for trainer
+   */
+  trainerWorkspaceFileName?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1550,6 +1558,8 @@ export interface LiveSessionsSelect<T extends boolean = true> {
   startedAt?: T;
   endedAt?: T;
   studentScratchpads?: T;
+  trainerWorkspaceFileId?: T;
+  trainerWorkspaceFileName?: T;
   updatedAt?: T;
   createdAt?: T;
 }

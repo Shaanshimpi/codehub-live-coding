@@ -30,6 +30,8 @@ export interface LiveCodePlaygroundProps {
   onStopExecution?: () => void
   height?: string | number
   theme?: 'vs-dark' | 'light'
+  runDisabled?: boolean // Disable Run button (e.g., when code has unsaved changes)
+  allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
 }
 
 export const SUPPORTED_LANGUAGES: Language[] = [

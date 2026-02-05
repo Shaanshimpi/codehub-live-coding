@@ -25,10 +25,12 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { currentCode, currentOutput, languageSlug } = body as {
-      currentCode?: string
+    const { currentCode, currentOutput, languageSlug, workspaceFileId, workspaceFileName } = body as {
+      currentCode?: string // Legacy: kept for backward compatibility
       currentOutput?: unknown
       languageSlug?: string
+      workspaceFileId?: string // New: primary way to broadcast file
+      workspaceFileName?: string
     }
 
     const payload = await getPayload({ config })
@@ -66,11 +68,35 @@ export async function POST(
       }
     }
 
-    // Update code / output / language
+    // Update code / output / language / workspace file
     const updateData: any = {}
-    if (typeof currentCode === 'string') {
+    
+    // NEW SYSTEM: If workspaceFileId is provided, fetch file content and store it
+    // This maintains backward compatibility while supporting new file-based system
+    if (workspaceFileId) {
+      updateData.trainerWorkspaceFileId = workspaceFileId
+      if (workspaceFileName) {
+        updateData.trainerWorkspaceFileName = workspaceFileName
+      }
+      
+      // Fetch file content to store in currentCode (for backward compatibility)
+      try {
+        const file = await payload.findByID({
+          collection: 'files',
+          id: workspaceFileId,
+        })
+        if (file && file.content) {
+          updateData.currentCode = file.content
+        }
+      } catch (error) {
+        // If file fetch fails, still update file ID but log error
+        console.error('Failed to fetch file content for broadcast:', error)
+      }
+    } else if (typeof currentCode === 'string') {
+      // LEGACY: Store code directly if no file ID provided
       updateData.currentCode = currentCode
     }
+    
     if (currentOutput !== undefined) {
       updateData.currentOutput = currentOutput
     }

@@ -27,6 +27,8 @@ type LiveSessionLiveResponse = {
   title: string
   language: string | null
   participantCount: number
+  trainerWorkspaceFileId: string | null
+  trainerWorkspaceFileName: string | null
 }
 
 function normalizeCodeParam(codeParam: string | string[] | undefined): string {

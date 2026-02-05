@@ -109,6 +109,22 @@ export const LiveSessions: CollectionConfig = {
         hidden: true, // Hide from admin UI, managed via API
       },
     },
+    {
+      name: 'trainerWorkspaceFileId',
+      type: 'text',
+      admin: {
+        description: 'Currently active workspace file ID for trainer',
+        position: 'sidebar',
+      },
+    },
+    {
+      name: 'trainerWorkspaceFileName',
+      type: 'text',
+      admin: {
+        description: 'Currently active workspace file name for trainer',
+        position: 'sidebar',
+      },
+    },
   ],
   access: {
     // Anyone can read active sessions (to join)

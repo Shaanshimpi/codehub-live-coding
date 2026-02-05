@@ -35,13 +35,22 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { code: scratchpadCode, language, output, workspaceFileId } = body
+    const { code: scratchpadCode, language, output, workspaceFileId } = body as {
+      code?: string // Legacy: kept for backward compatibility
+      language?: string
+      output?: unknown
+      workspaceFileId?: string // New: primary way to sync file
+    }
 
-    if (typeof scratchpadCode !== 'string' || typeof language !== 'string') {
-      return NextResponse.json(
-        { error: 'Missing or invalid fields: code and language must be strings' },
-        { status: 400 }
-      )
+    // NEW SYSTEM: If workspaceFileId is provided, use it (code will be fetched from file)
+    // LEGACY: If no workspaceFileId, require code and language
+    if (!workspaceFileId) {
+      if (typeof scratchpadCode !== 'string' || typeof language !== 'string') {
+        return NextResponse.json(
+          { error: 'Missing or invalid fields: code and language must be strings when workspaceFileId is not provided' },
+          { status: 400 }
+        )
+      }
     }
 
     const payload = await getPayload({ config })
@@ -68,8 +77,11 @@ export async function POST(
     // Get or initialize student scratchpads
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
     
-    // Get workspace file name if workspaceFileId is provided
+    // Get workspace file info if workspaceFileId is provided
     let workspaceFileName = null
+    let fileContent = scratchpadCode || ''
+    let fileLanguage = language || 'javascript'
+    
     if (workspaceFileId) {
       try {
         const file = await payload.findByID({
@@ -77,15 +89,32 @@ export async function POST(
           id: workspaceFileId,
         })
         workspaceFileName = file.name
+        // Fetch file content if not provided in request
+        if (!scratchpadCode && file.content) {
+          fileContent = file.content
+        }
+        // Infer language from file extension if not provided
+        if (!language && file.name) {
+          const parts = file.name.split('.')
+          const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
+          if (ext) {
+            const extToLang: Record<string, string> = {
+              'js': 'javascript', 'ts': 'typescript', 'py': 'python',
+              'java': 'java', 'cpp': 'cpp', 'c': 'c', 'cs': 'csharp',
+              'php': 'php', 'rb': 'ruby', 'go': 'go', 'rs': 'rust',
+            }
+            fileLanguage = extToLang[ext] || 'javascript'
+          }
+        }
       } catch {
-        // File might not exist, keep null
+        // File might not exist, use provided code/language or defaults
       }
     }
     
     // Update this student's scratchpad
     scratchpads[user.id] = {
-      code: scratchpadCode,
-      language,
+      code: fileContent, // Store code (from file or provided)
+      language: fileLanguage,
       updatedAt: new Date().toISOString(),
       studentName: user.name || user.email || 'Anonymous',
       ...(output && { output }),

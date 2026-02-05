@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { Save, CheckCircle } from 'lucide-react'
-import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
+import { SUPPORTED_LANGUAGES, type ExecutionResult } from '@/components/LiveCodePlayground/types'
 
 interface WorkspaceEditorProps {
   fileId: string
@@ -15,6 +15,11 @@ interface WorkspaceEditorProps {
   onRun: (code: string, input?: string) => void
   executing: boolean
   onSave?: () => void
+  readOnly?: boolean
+  hideSaveButton?: boolean // Hide save button when parent handles saving
+  runDisabled?: boolean // Disable Run button (e.g., when code has unsaved changes)
+  executionResult?: ExecutionResult | null // Execution result to display
+  allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
 }
 
 export function WorkspaceEditor({
@@ -27,6 +32,11 @@ export function WorkspaceEditor({
   onRun,
   executing,
   onSave,
+  readOnly = false,
+  hideSaveButton = false,
+  runDisabled = false,
+  executionResult = null,
+  allowRunInReadOnly = false,
 }: WorkspaceEditorProps) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -38,25 +48,16 @@ export function WorkspaceEditor({
     setHasChanges(code !== lastSavedCode)
   }, [code, lastSavedCode])
 
-  // Auto-save debounced (every 2 seconds after typing stops)
-  useEffect(() => {
-    if (!hasChanges || saving) return
-
-    const timer = setTimeout(() => {
-      handleSave()
-    }, 2000)
-
-    return () => clearTimeout(timer)
-  }, [code, hasChanges, saving])
-
   const handleSave = useCallback(async () => {
-    if (saving || !hasChanges) return
+    if (saving || !hasChanges || !fileId) return
 
     setSaving(true)
     setSaveSuccess(false)
 
     try {
-      const response = await fetch(`/api/files/${fileId}`, {
+      // Ensure fileId is a string (Payload uses numbers but API expects string in URL)
+      const fileIdStr = String(fileId)
+      const response = await fetch(`/api/files/${fileIdStr}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -91,6 +92,9 @@ export function WorkspaceEditor({
     }
   }, [fileId, code, saving, hasChanges, onSave])
 
+  // Auto-save disabled - only manual save via button click
+  // Removed auto-save to reduce API calls
+
   const handleManualSave = () => {
     handleSave()
   }
@@ -108,7 +112,8 @@ export function WorkspaceEditor({
           <select
             value={language}
             onChange={(e) => onLanguageChange(e.target.value)}
-            className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
+            disabled={readOnly}
+            className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
               <option key={lang.id} value={lang.id}>
@@ -117,26 +122,28 @@ export function WorkspaceEditor({
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          {saveSuccess && (
-            <div className="flex items-center gap-1.5 rounded-md bg-success/20 px-2 py-1 text-xs text-success">
-              <CheckCircle className="h-3 w-3" />
-              <span>Saved</span>
-            </div>
-          )}
-          {hasChanges && !saveSuccess && (
-            <span className="text-xs text-muted-foreground">Unsaved changes</span>
-          )}
-          <button
-            onClick={handleManualSave}
-            disabled={saving || !hasChanges}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Save (Ctrl+S)"
-          >
-            <Save className="h-3 w-3" />
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
+        {!readOnly && !hideSaveButton && (
+          <div className="flex items-center gap-2">
+            {saveSuccess && (
+              <div className="flex items-center gap-1.5 rounded-md bg-success/20 px-2 py-1 text-xs text-success">
+                <CheckCircle className="h-3 w-3" />
+                <span>Saved</span>
+              </div>
+            )}
+            {hasChanges && !saveSuccess && (
+              <span className="text-xs text-muted-foreground">Unsaved changes</span>
+            )}
+            <button
+              onClick={handleManualSave}
+              disabled={saving || !hasChanges}
+              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Save (Ctrl+S)"
+            >
+              <Save className="h-3 w-3" />
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Editor */}
@@ -147,8 +154,12 @@ export function WorkspaceEditor({
           onChange={onChange}
           onRun={onRun}
           executing={executing}
+          executionResult={executionResult}
           showAIHelper={false} // AI is in sidebar
           theme="vs-dark"
+          readOnly={readOnly}
+          runDisabled={runDisabled}
+          allowRunInReadOnly={allowRunInReadOnly}
         />
       </div>
     </div>

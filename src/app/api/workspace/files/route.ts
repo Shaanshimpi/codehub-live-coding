@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     const payload = await getPayload({ config })
 
-    // Get all files for this user
+    // Get all files for this user with folder information
     const files = await payload.find({
       collection: 'files',
       where: {
@@ -37,7 +37,37 @@ export async function GET(request: NextRequest) {
       },
       limit: 1000,
       sort: '-updatedAt',
+      depth: 2, // Include folder relationship
     })
+
+    // Helper function to build folder path
+    const getFolderPath = (folder: any, foldersMap: Map<number, any>): string => {
+      if (!folder) return ''
+      const folderObj = typeof folder === 'object' ? folder : foldersMap.get(folder)
+      if (!folderObj) return ''
+      
+      const parentPath = folderObj.folder 
+        ? getFolderPath(folderObj.folder, foldersMap)
+        : ''
+      return parentPath ? `${parentPath}/${folderObj.name}` : folderObj.name
+    }
+
+    // Build folder map for path resolution
+    const foldersMap = new Map()
+    if (files.docs.length > 0) {
+      // Fetch all folders to build path
+      const folders = await payload.find({
+        collection: 'folders',
+        where: {
+          user: { equals: user.id },
+        },
+        limit: 1000,
+        depth: 2,
+      })
+      folders.docs.forEach((folder: any) => {
+        foldersMap.set(folder.id, folder)
+      })
+    }
 
     // Map to simpler format and infer language from extension
     const filesList = files.docs.map((file) => {
@@ -63,12 +93,21 @@ export async function GET(request: NextRequest) {
       else if (ext === 'r') language = 'r'
       else if (ext === 'sql') language = 'sql'
 
+      // Get folder path
+      const folderPath = file.folder && file.folder !== null ? getFolderPath(file.folder, foldersMap) : ''
+
       return {
         id: file.id,
         name: file.name,
         content: file.content || '',
         language,
         updatedAt: file.updatedAt,
+        folderPath, // Add folder path
+        folderName: file.folder && typeof file.folder === 'object' ? file.folder.name : null,
+        folder: file.folder && typeof file.folder === 'object' ? {
+          id: String(file.folder.id),
+          name: file.folder.name,
+        } : undefined,
       }
     })
 

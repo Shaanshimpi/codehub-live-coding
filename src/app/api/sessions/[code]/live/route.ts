@@ -44,9 +44,57 @@ export async function GET(
 
     const session = sessions.docs[0]
 
-    // Determine language slug if relationship is populated
+    // Determine language slug - prioritize from trainer's file name, then from session language
     let languageSlug: string | null = null
-    if (session.language && typeof session.language === 'object') {
+    
+    // First, try to infer from trainer's file name
+    if (session.trainerWorkspaceFileName) {
+      const fileName = String(session.trainerWorkspaceFileName)
+      const parts = fileName.split('.')
+      if (parts.length > 1) {
+        const ext = parts[parts.length - 1].toLowerCase()
+        // Map common extensions to language slugs
+        const extToLang: Record<string, string> = {
+          'js': 'javascript',
+          'ts': 'typescript',
+          'py': 'python',
+          'c': 'c',
+          'cpp': 'cpp',
+          'cc': 'cpp',
+          'cxx': 'cpp',
+          'java': 'java',
+          'cs': 'csharp',
+          'php': 'php',
+          'rb': 'ruby',
+          'go': 'go',
+          'rs': 'rust',
+          'kt': 'kotlin',
+          'swift': 'swift',
+          'scala': 'scala',
+          'pl': 'perl',
+          'r': 'r',
+          'dart': 'dart',
+          'lua': 'lua',
+          'sh': 'bash',
+          'hs': 'haskell',
+          'ex': 'elixir',
+          'erl': 'erlang',
+          'clj': 'clojure',
+          'groovy': 'groovy',
+          'm': 'objectivec',
+          'fs': 'fsharp',
+          'asm': 'assembly',
+          'f90': 'fortran',
+          'f': 'fortran',
+          'cob': 'cobol',
+          'pas': 'pascal',
+        }
+        languageSlug = extToLang[ext] || null
+      }
+    }
+    
+    // Fallback to session language if file-based inference didn't work
+    if (!languageSlug && session.language && typeof session.language === 'object') {
       // @ts-expect-error - payload typed as any
       languageSlug = session.language.slug || null
     }
@@ -62,6 +110,8 @@ export async function GET(
       title: session.title,
       language: languageSlug,
       participantCount,
+      trainerWorkspaceFileId: session.trainerWorkspaceFileId || null,
+      trainerWorkspaceFileName: session.trainerWorkspaceFileName || null,
     })
   } catch (error) {
     console.error('Error fetching live code:', error)
