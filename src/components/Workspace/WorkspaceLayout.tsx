@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, Radio } from 'lucide-react'
+import { Sparkles, Radio, Folder, Terminal } from 'lucide-react'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
@@ -24,6 +24,8 @@ export function WorkspaceLayout() {
   const [executing, setExecuting] = useState(false)
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [showAI, setShowAI] = useState(false)
+  const [showFileExplorer, setShowFileExplorer] = useState(true)
+  const [showOutput, setShowOutput] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0) // Force file explorer refresh
 
   // Update code (and infer language from extension) when file changes
@@ -84,6 +86,44 @@ export function WorkspaceLayout() {
           <span className="text-sm text-muted-foreground">Workspace</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* File Explorer Toggle */}
+          <button
+            onClick={() => setShowFileExplorer(!showFileExplorer)}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              showFileExplorer
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+          >
+            <Folder className="h-4 w-4" />
+          </button>
+          {/* Output Toggle */}
+          <button
+            onClick={() => setShowOutput(!showOutput)}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              showOutput
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            title={showOutput ? 'Hide Output' : 'Show Output'}
+          >
+            <Terminal className="h-4 w-4" />
+          </button>
+          {/* AI Help Toggle */}
+          {selectedFile && (
+            <button
+              onClick={() => setShowAI(!showAI)}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                showAI
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title={showAI ? 'Hide AI Help' : 'Show AI Help'}
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          )}
           <Link
             href="/join"
             className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -97,17 +137,27 @@ export function WorkspaceLayout() {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: File Explorer */}
-        <div className="w-64 border-r bg-muted/30 overflow-hidden">
-          <FileExplorer
-            key={refreshKey}
-            onFileSelect={handleFileSelect}
-            selectedFileId={selectedFile?.id}
-            onFileSaved={handleFileSaved}
-          />
-        </div>
+        {showFileExplorer && (
+          <div className="w-64 border-r bg-muted/30 overflow-hidden">
+            <FileExplorer
+              key={refreshKey}
+              onFileSelect={handleFileSelect}
+              selectedFileId={selectedFile?.id}
+              onFileSaved={handleFileSaved}
+            />
+          </div>
+        )}
 
         {/* Center: Editor */}
-        <div className={`flex flex-1 flex-col overflow-hidden ${showAI ? 'max-w-[50%]' : ''}`}>
+        <div
+          className={`flex flex-1 flex-col overflow-hidden ${
+            showAI
+              ? showFileExplorer && showOutput
+                ? 'max-w-[50%]'
+                : 'max-w-[65%]'
+              : ''
+          }`}
+        >
           {selectedFile ? (
             <WorkspaceEditor
               fileId={selectedFile.id}
@@ -131,30 +181,22 @@ export function WorkspaceLayout() {
         </div>
 
         {/* Right: Output + AI */}
-        <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
-          {/* Output Panel */}
-          <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
-            <div className="border-b bg-muted/30 px-3 py-1.5">
-              <h2 className="text-xs font-medium">Output</h2>
+        {showOutput && (
+          <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
+            {/* Output Panel */}
+            <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
+              <div className="border-b bg-muted/30 px-3 py-1.5">
+                <h2 className="text-xs font-medium">Output</h2>
+              </div>
+              <OutputPanel
+                result={executionResult}
+                executing={executing}
+                onClear={() => setExecutionResult(null)}
+              />
             </div>
-            <OutputPanel
-              result={executionResult}
-              executing={executing}
-              onClear={() => setExecutionResult(null)}
-            />
-          </div>
 
-          {/* AI Assistant Toggle */}
-          {selectedFile && (
-            <button
-              onClick={() => setShowAI(!showAI)}
-              className="flex items-center justify-center gap-2 rounded-md border bg-card px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-            >
-              <Sparkles className="h-4 w-4" />
-              {showAI ? 'Hide' : 'Show'} AI Help
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* AI Assistant Panel */}
         {showAI && selectedFile && (

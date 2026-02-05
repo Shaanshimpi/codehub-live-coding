@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <link href="/favicon.ico" rel="icon" sizes="32x32" />
         <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <Providers>
           {children}
           <FloatingLogout />

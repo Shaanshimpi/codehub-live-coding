@@ -224,7 +224,7 @@ export function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionM
                           <File className="h-3 w-3 text-muted-foreground" />
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-xs truncate">{file.name}</div>
-                            <div className="text-[10px] text-muted-foreground truncate">
+                            <div className="text-[10px] text-muted-foreground truncate" suppressHydrationWarning>
                               {file.folderPath ? `📁 ${file.folderPath}/` : ''} {file.language} • {new Date(file.updatedAt).toLocaleDateString()}
                             </div>
                           </div>

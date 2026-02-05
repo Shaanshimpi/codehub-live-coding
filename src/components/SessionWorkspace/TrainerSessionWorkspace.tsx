@@ -8,7 +8,7 @@ import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
-import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 
@@ -61,6 +61,8 @@ export function TrainerSessionWorkspace({
   const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [showAI, setShowAI] = useState(false)
   const [showStudents, setShowStudents] = useState(false)
+  const [showFileExplorer, setShowFileExplorer] = useState(true)
+  const [showOutput, setShowOutput] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [showFileModal, setShowFileModal] = useState(false)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
@@ -418,6 +420,44 @@ export function TrainerSessionWorkspace({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* File Explorer Toggle */}
+          <button
+            onClick={() => setShowFileExplorer(!showFileExplorer)}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              showFileExplorer
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+          >
+            <Folder className="h-3 w-3" />
+          </button>
+          {/* Output Toggle */}
+          <button
+            onClick={() => setShowOutput(!showOutput)}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              showOutput
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            }`}
+            title={showOutput ? 'Hide Output' : 'Show Output'}
+          >
+            <Terminal className="h-3 w-3" />
+          </button>
+          {/* AI Help Toggle */}
+          {selectedFile && (
+            <button
+              onClick={() => setShowAI(!showAI)}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                showAI
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title={showAI ? 'Hide AI Help' : 'Show AI Help'}
+            >
+              <Sparkles className="h-3 w-3" />
+            </button>
+          )}
           <button
             onClick={() => setShowStudents((prev) => !prev)}
             className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent transition-colors"
@@ -427,7 +467,7 @@ export function TrainerSessionWorkspace({
             {showStudents ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
           {lastUpdate && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" suppressHydrationWarning>
               <RefreshCw className="h-3 w-3" />
               <span>Last broadcast: {lastUpdate.toLocaleTimeString()}</span>
             </div>
@@ -505,7 +545,7 @@ export function TrainerSessionWorkspace({
                             📁 {student.workspaceFileName}
                           </span>
                         )}
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground" suppressHydrationWarning>
                           {student.language} • {student.updatedAt ? new Date(student.updatedAt).toLocaleTimeString() : 'Never'}
                         </span>
                       </div>
@@ -554,25 +594,35 @@ export function TrainerSessionWorkspace({
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: File Explorer */}
-        <div className="w-64 border-r bg-muted/30 overflow-hidden">
-          {switchingFile && (
-            <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-              <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-xs">Saving current file...</span>
+        {showFileExplorer && (
+          <div className="w-64 border-r bg-muted/30 overflow-hidden">
+            {switchingFile && (
+              <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
+                <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-xs">Saving current file...</span>
+                </div>
               </div>
-            </div>
-          )}
-          <FileExplorer
-            key={refreshKey}
-            onFileSelect={handleFileSelect}
-            selectedFileId={activeFileId || undefined}
-            onFileSaved={handleFileSaved}
-          />
-        </div>
+            )}
+            <FileExplorer
+              key={refreshKey}
+              onFileSelect={handleFileSelect}
+              selectedFileId={activeFileId || undefined}
+              onFileSaved={handleFileSaved}
+            />
+          </div>
+        )}
 
         {/* Center: Editor */}
-        <div className={`flex flex-1 flex-col overflow-hidden ${showAI ? 'max-w-[50%]' : ''}`}>
+        <div
+          className={`flex flex-1 flex-col overflow-hidden ${
+            showAI
+              ? showFileExplorer && showOutput
+                ? 'max-w-[50%]'
+                : 'max-w-[65%]'
+              : ''
+          }`}
+        >
           {selectedFile ? (
             <>
               {/* Editor Header with Active File Indicator */}
@@ -666,18 +716,21 @@ export function TrainerSessionWorkspace({
         </div>
 
         {/* Right: Output + AI */}
-        <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
-          <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
-            <div className="border-b bg-muted/30 px-3 py-1.5">
-              <h2 className="text-xs font-medium">Output</h2>
+        {showOutput && (
+          <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
+            <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
+              <div className="border-b bg-muted/30 px-3 py-1.5">
+                <h2 className="text-xs font-medium">Output</h2>
+              </div>
+              <OutputPanel
+                result={executionResult}
+                executing={executing}
+                onClear={() => setExecutionResult(null)}
+              />
             </div>
-            <OutputPanel
-              result={executionResult}
-              executing={executing}
-              onClear={() => setExecutionResult(null)}
-            />
+
           </div>
-        </div>
+        )}
 
         {/* AI Assistant Panel */}
         {showAI && selectedFile && (

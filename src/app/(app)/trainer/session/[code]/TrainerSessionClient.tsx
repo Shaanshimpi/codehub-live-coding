@@ -65,6 +65,9 @@ export function TrainerSessionClient() {
   const [expandedStudentIds, setExpandedStudentIds] = useState<Set<string>>(new Set())
   const [refreshingStudents, setRefreshingStudents] = useState(false)
   const [refreshStudentsSuccess, setRefreshStudentsSuccess] = useState(false)
+  // Manual save function state - must be with other useState hooks
+  const [savingCode, setSavingCode] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const loadInitial = useCallback(async () => {
     if (!joinCode) return
@@ -202,8 +205,6 @@ export function TrainerSessionClient() {
   )
 
   // Manual save function for trainer code
-  const [savingCode, setSavingCode] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
   const handleSaveCode = useCallback(async () => {
     if (!joinCode) return
     setSavingCode(true)
@@ -244,7 +245,7 @@ export function TrainerSessionClient() {
     }
   }, [joinCode])
 
-  // Toggle student expansion
+  // Toggle student expansion - MUST be defined before any conditional returns
   const handleToggleStudent = useCallback((userId: string) => {
     setExpandedStudentIds((prev) => {
       const next = new Set(prev)
@@ -257,9 +258,11 @@ export function TrainerSessionClient() {
     })
   }, [])
 
+  // All hooks must be defined before any conditional returns
   const currentLanguage = SUPPORTED_LANGUAGES.find((l) => l.id === language)
   const languageLabel = currentLanguage?.name || language
 
+  // Now safe to have conditional returns
   if (!joinCode) {
     return (
       <div className="container mx-auto py-16">
