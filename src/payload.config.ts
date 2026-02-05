@@ -4,6 +4,7 @@ import { buildConfig, PayloadRequest } from 'payload'
 import { fileURLToPath } from 'url'
 
 import { Categories } from './collections/Categories'
+import { Fees } from './collections/Fees'
 import { Files } from './collections/Files'
 import { Folders } from './collections/Folders'
 import { Languages } from './collections/Languages'
@@ -14,6 +15,7 @@ import { Posts } from './collections/Posts'
 import { Users } from './collections/Users'
 import { Footer } from './Footer/config'
 import { Header } from './Header/config'
+import { PlatformSettings } from './Settings/config'
 import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
@@ -68,9 +70,9 @@ export default buildConfig({
   // This config helps us configure global or default features that the other editors can inherit
   editor: defaultLexical,
   db: getDbAdapter(),
-  collections: [Pages, Posts, Media, Categories, Users, Languages, LiveSessions, Folders, Files],
+  collections: [Pages, Posts, Media, Categories, Users, Languages, LiveSessions, Folders, Files, Fees],
   cors: [getServerSideURL()].filter(Boolean),
-  globals: [Header, Footer],
+  globals: [Header, Footer, PlatformSettings],
   plugins,
   secret: process.env.PAYLOAD_SECRET,
   sharp,

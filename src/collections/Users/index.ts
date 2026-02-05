@@ -56,6 +56,121 @@ export const Users: CollectionConfig = {
         description: 'User role determines access permissions',
       },
     },
+    {
+      type: 'tabs',
+      tabs: [
+        {
+          label: 'Basic Info',
+          fields: [
+            {
+              name: 'phone',
+              type: 'text',
+              admin: {
+                description: 'Primary phone number',
+              },
+            },
+            {
+              name: 'altPhone',
+              type: 'text',
+              admin: {
+                description: 'Alternate phone number',
+              },
+            },
+          ],
+        },
+        {
+          label: 'Personal Details',
+          fields: [
+            {
+              name: 'dateOfBirth',
+              type: 'date',
+              admin: {
+                date: {
+                  pickerAppearance: 'dayAndTime',
+                },
+                description: 'Date of birth',
+              },
+            },
+            {
+              name: 'college',
+              type: 'text',
+              admin: {
+                description: 'College/University name',
+              },
+            },
+            {
+              name: 'educationalBackground',
+              type: 'textarea',
+              admin: {
+                description: 'Educational background/qualifications',
+              },
+            },
+          ],
+        },
+        {
+          label: 'Address',
+          fields: [
+            {
+              name: 'address',
+              type: 'textarea',
+              admin: {
+                description: 'Street address',
+              },
+            },
+            {
+              name: 'city',
+              type: 'text',
+            },
+            {
+              name: 'state',
+              type: 'text',
+            },
+            {
+              name: 'postalCode',
+              type: 'text',
+              admin: {
+                description: 'ZIP/Postal code',
+              },
+            },
+            {
+              name: 'country',
+              type: 'text',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'trialStartDate',
+      type: 'date',
+      admin: {
+        position: 'sidebar',
+        date: {
+          pickerAppearance: 'dayAndTime',
+        },
+        description: 'Trial period start date',
+      },
+    },
+    {
+      name: 'trialEndDate',
+      type: 'date',
+      admin: {
+        position: 'sidebar',
+        date: {
+          pickerAppearance: 'dayAndTime',
+        },
+        description: 'Trial period end date (can be auto-calculated)',
+      },
+    },
+    {
+      name: 'isAdmissionConfirmed',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        position: 'sidebar',
+        description: 'Mark when student confirms admission after trial',
+      },
+    },
   ],
   hooks: {
     beforeChange: [

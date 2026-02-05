@@ -76,6 +76,7 @@ export interface Config {
     'live-sessions': LiveSession;
     folders: Folder;
     files: File;
+    fees: Fee;
     redirects: Redirect;
     forms: Form;
     'form-submissions': FormSubmission;
@@ -102,6 +103,7 @@ export interface Config {
     'live-sessions': LiveSessionsSelect<false> | LiveSessionsSelect<true>;
     folders: FoldersSelect<false> | FoldersSelect<true>;
     files: FilesSelect<false> | FilesSelect<true>;
+    fees: FeesSelect<false> | FeesSelect<true>;
     redirects: RedirectsSelect<false> | RedirectsSelect<true>;
     forms: FormsSelect<false> | FormsSelect<true>;
     'form-submissions': FormSubmissionsSelect<false> | FormSubmissionsSelect<true>;
@@ -120,10 +122,12 @@ export interface Config {
   globals: {
     header: Header;
     footer: Footer;
+    'platform-settings': PlatformSetting;
   };
   globalsSelect: {
     header: HeaderSelect<false> | HeaderSelect<true>;
     footer: FooterSelect<false> | FooterSelect<true>;
+    'platform-settings': PlatformSettingsSelect<false> | PlatformSettingsSelect<true>;
   };
   locale: null;
   user: User & {
@@ -431,6 +435,49 @@ export interface User {
    * User role determines access permissions
    */
   role: 'admin' | 'trainer' | 'student';
+  /**
+   * Primary phone number
+   */
+  phone?: string | null;
+  /**
+   * Alternate phone number
+   */
+  altPhone?: string | null;
+  /**
+   * Date of birth
+   */
+  dateOfBirth?: string | null;
+  /**
+   * College/University name
+   */
+  college?: string | null;
+  /**
+   * Educational background/qualifications
+   */
+  educationalBackground?: string | null;
+  /**
+   * Street address
+   */
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  /**
+   * ZIP/Postal code
+   */
+  postalCode?: string | null;
+  country?: string | null;
+  /**
+   * Trial period start date
+   */
+  trialStartDate?: string | null;
+  /**
+   * Trial period end date (can be auto-calculated)
+   */
+  trialEndDate?: string | null;
+  /**
+   * Mark when student confirms admission after trial
+   */
+  isAdmissionConfirmed?: boolean | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -938,6 +985,67 @@ export interface File {
   createdAt: string;
 }
 /**
+ * Manage student fee records and installment schedules
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "fees".
+ */
+export interface Fee {
+  id: number;
+  /**
+   * Student this fee record belongs to
+   */
+  student: number | User;
+  /**
+   * Course name or identifier (optional)
+   */
+  courseName?: string | null;
+  /**
+   * Total fee amount
+   */
+  totalFee: number;
+  /**
+   * Currency code
+   */
+  currency: string;
+  /**
+   * Installment schedule
+   */
+  installments: {
+    /**
+     * Due date for this installment
+     */
+    dueDate: string;
+    /**
+     * Amount for this installment
+     */
+    amount: number;
+    /**
+     * Mark as paid when payment is received
+     */
+    isPaid?: boolean | null;
+    /**
+     * Payment method used
+     */
+    paymentMethod?: ('cash' | 'upi' | 'card' | 'bank_transfer' | 'other') | null;
+    /**
+     * Date when payment was received
+     */
+    paidAt?: string | null;
+    /**
+     * Admin notes about this payment
+     */
+    notes?: string | null;
+    id?: string | null;
+  }[];
+  /**
+   * Mark as active if this is the current fee record for the student
+   */
+  isActive?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "redirects".
  */
@@ -1162,6 +1270,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'files';
         value: number | File;
+      } | null)
+    | ({
+        relationTo: 'fees';
+        value: number | Fee;
       } | null)
     | ({
         relationTo: 'redirects';
@@ -1512,6 +1624,19 @@ export interface CategoriesSelect<T extends boolean = true> {
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
   role?: T;
+  phone?: T;
+  altPhone?: T;
+  dateOfBirth?: T;
+  college?: T;
+  educationalBackground?: T;
+  address?: T;
+  city?: T;
+  state?: T;
+  postalCode?: T;
+  country?: T;
+  trialStartDate?: T;
+  trialEndDate?: T;
+  isAdmissionConfirmed?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;
@@ -1583,6 +1708,30 @@ export interface FilesSelect<T extends boolean = true> {
   content?: T;
   user?: T;
   folder?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "fees_select".
+ */
+export interface FeesSelect<T extends boolean = true> {
+  student?: T;
+  courseName?: T;
+  totalFee?: T;
+  currency?: T;
+  installments?:
+    | T
+    | {
+        dueDate?: T;
+        amount?: T;
+        isPaid?: T;
+        paymentMethod?: T;
+        paidAt?: T;
+        notes?: T;
+        id?: T;
+      };
+  isActive?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1921,6 +2070,58 @@ export interface Footer {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "platform-settings".
+ */
+export interface PlatformSetting {
+  id: number;
+  /**
+   * Number of days for student trial period
+   */
+  trialDays: number;
+  /**
+   * Allow automatic trial extension
+   */
+  autoExtendTrial?: boolean | null;
+  /**
+   * Toggle to block students with overdue installments
+   */
+  blockUnpaidStudents: boolean;
+  /**
+   * Days before due date to show warning modal
+   */
+  warningDaysBeforeDue: number;
+  /**
+   * Days after due date before blocking (0 = block immediately)
+   */
+  gracePeriodDays: number;
+  /**
+   * Default currency for fees
+   */
+  defaultCurrency: string;
+  /**
+   * Available payment methods
+   */
+  availablePaymentMethods: {
+    method: string;
+    id?: string | null;
+  }[];
+  /**
+   * Temporarily block all students (except admins/trainers)
+   */
+  maintenanceMode: boolean;
+  /**
+   * If maintenance mode is on, allow all students regardless of fees
+   */
+  allowAllStudentsDuringMaintenance: boolean;
+  /**
+   * Maximum installments allowed per fee record (optional)
+   */
+  maxInstallmentsPerFee?: number | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "header_select".
  */
 export interface HeaderSelect<T extends boolean = true> {
@@ -1961,6 +2162,30 @@ export interface FooterSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "platform-settings_select".
+ */
+export interface PlatformSettingsSelect<T extends boolean = true> {
+  trialDays?: T;
+  autoExtendTrial?: T;
+  blockUnpaidStudents?: T;
+  warningDaysBeforeDue?: T;
+  gracePeriodDays?: T;
+  defaultCurrency?: T;
+  availablePaymentMethods?:
+    | T
+    | {
+        method?: T;
+        id?: T;
+      };
+  maintenanceMode?: T;
+  allowAllStudentsDuringMaintenance?: T;
+  maxInstallmentsPerFee?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;
