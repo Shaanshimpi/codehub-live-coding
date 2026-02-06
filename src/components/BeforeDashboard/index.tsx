@@ -16,13 +16,16 @@ const BeforeDashboard: React.FC = () => {
         // Use full navigation to leave the admin app cleanly
         window.location.assign(redirect)
       } else {
-        // Default redirect to home if no redirect is stored or if it's an admin path
+        // Clear any stale redirect value but stay on admin dashboard
         sessionStorage.removeItem('codehub:postLoginRedirect')
-        window.location.assign('/')
       }
     } catch {
-      // If sessionStorage fails, still redirect to home
-      window.location.assign('/')
+      // If sessionStorage fails, just clear it and stay on dashboard
+      try {
+        sessionStorage.removeItem('codehub:postLoginRedirect')
+      } catch {
+        // Ignore if sessionStorage is not available
+      }
     }
   }, [])
 
