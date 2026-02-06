@@ -23,7 +23,7 @@ export function StudentView({ lectureId }: StudentViewProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('trainer')
   const [hasNewTrainerUpdate, setHasNewTrainerUpdate] = useState(false)
 
-  // Trainer's code (read-only)
+  // Trainer&apos;s code (read-only)
   const [trainerSnapshot, setTrainerSnapshot] = useState<CodeSnapshot | null>(null)
   const [trainerLanguage, setTrainerLanguage] = useState('javascript')
   const [trainerCode, setTrainerCode] = useState('')
@@ -39,7 +39,7 @@ export function StudentView({ lectureId }: StudentViewProps) {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [showAI, setShowAI] = useState(false)
 
-  // Subscribe to trainer's updates
+  // Subscribe to trainer&apos;s updates
   useEffect(() => {
     if (!lectureId) return
 
@@ -161,7 +161,7 @@ export function StudentView({ lectureId }: StudentViewProps) {
             }`}
           >
             <Eye className="h-4 w-4" />
-            <span>Trainer's Code</span>
+            <span>Trainer&apos;s Code</span>
             {hasNewTrainerUpdate && activeTab !== 'trainer' && (
               <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white animate-pulse">
                 !
@@ -189,13 +189,13 @@ export function StudentView({ lectureId }: StudentViewProps) {
         {/* TRAINER TAB CONTENT */}
         {activeTab === 'trainer' && (
           <div className="flex flex-1 gap-2 overflow-hidden p-2">
-            {/* Trainer's code - Non-selectable & Non-copyable */}
+            {/* Trainer&apos;s code - Non-selectable & Non-copyable */}
             <div className="flex flex-1 flex-col rounded-lg border border-primary/50 bg-card overflow-hidden select-none">
               <div className="flex items-center justify-between border-b bg-primary/10 px-3 py-1.5">
                 <div className="flex items-center gap-2">
                   <Eye className="h-3 w-3 text-primary" />
                   <h2 className="text-xs font-medium text-primary">
-                    Trainer's Code (View Only - Type to Learn!)
+                    Trainer&apos;s Code (View Only - Type to Learn!)
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -228,7 +228,7 @@ export function StudentView({ lectureId }: StudentViewProps) {
             {/* Trainer's output */}
             <div className="flex w-80 flex-col rounded-lg border border-primary/50 bg-card overflow-hidden">
               <div className="border-b bg-primary/10 px-3 py-1.5">
-                <h2 className="text-xs font-medium text-primary">Trainer's Output</h2>
+                <h2 className="text-xs font-medium text-primary">Trainer&apos;s Output</h2>
               </div>
               <OutputPanel
                 result={trainerOutput}

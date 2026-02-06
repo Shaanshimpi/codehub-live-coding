@@ -202,9 +202,9 @@ export function AIAssistantPanel({
               <Sparkles className="mx-auto mb-2 h-8 w-8 opacity-50" />
               {role === 'student' ? (
                 <>
-                  <p className="font-medium">Hi! I'm your coding tutor 👋</p>
+                  <p className="font-medium">Hi! I&apos;m your coding tutor 👋</p>
                   <p className="text-xs mt-2">
-                    I won't give you the answers directly, but I'll guide you!
+                    I won&apos;t give you the answers directly, but I&apos;ll guide you!
                   </p>
                   <p className="text-xs mt-1">
                     Ask me about errors, concepts, or request hints

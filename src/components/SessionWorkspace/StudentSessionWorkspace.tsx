@@ -52,7 +52,7 @@ export function StudentSessionWorkspace({
   const [activeTab, setActiveTab] = useState<ActiveTab>('trainer')
   const [hasNewTrainerUpdate, setHasNewTrainerUpdate] = useState(false)
 
-  // Trainer's file (read-only)
+  // Trainer&apos;s file (read-only)
   const [trainerFile, setTrainerFile] = useState<WorkspaceFile | null>(null)
   const [trainerLanguage, setTrainerLanguage] = useState('javascript')
   const [trainerExecuting, setTrainerExecuting] = useState(false)
@@ -659,7 +659,7 @@ export function StudentSessionWorkspace({
           )}
         >
           <Eye className="h-3 w-3" />
-          Trainer's Code
+          Trainer&apos;s Code
           {hasNewTrainerUpdate && (
             <Bell className="h-3 w-3 text-primary animate-pulse" />
           )}
@@ -742,7 +742,7 @@ export function StudentSessionWorkspace({
               ) : (
                 <div className="flex h-full flex-col items-center justify-center">
                   <div className="text-center space-y-4">
-                    <p className="text-muted-foreground">Trainer hasn't selected a file yet</p>
+                    <p className="text-muted-foreground">Trainer hasn&apos;t selected a file yet</p>
                     <button
                       onClick={handleRefreshTrainerCode}
                       disabled={refreshingTrainerCode || !sessionActive}

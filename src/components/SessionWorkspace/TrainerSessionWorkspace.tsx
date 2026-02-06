@@ -502,7 +502,7 @@ export function TrainerSessionWorkspace({
       {showStudents && (
         <div className="border-b bg-muted/30 px-4 py-2 max-h-[40vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-medium">Students' Scratchpads</h3>
+            <h3 className="text-xs font-medium">Students&apos; Scratchpads</h3>
             <button
               onClick={onRefreshStudents}
               disabled={refreshingStudents}

@@ -25,7 +25,7 @@ export function OutputPanel({ result, executing, onClear }: OutputPanelProps) {
       <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
         <div className="space-y-2">
           <div className="text-4xl opacity-20">▶️</div>
-          <p>Click "Run" to execute your code</p>
+          <p>Click &quot;Run&quot; to execute your code</p>
           <p className="text-xs">Powered by OneCompiler</p>
         </div>
       </div>
