@@ -1,30 +1,15 @@
 /**
- * Database Adapter Factory
+ * Database Adapter
  * 
- * Switches between PostgreSQL (Neon) and SQLite based on environment.
+ * Uses PostgreSQL (Neon) for all environments.
  * 
- * Usage in .env:
- *   USE_LOCAL_DB=true   → Uses SQLite (local development, no network needed)
- *   USE_LOCAL_DB=false  → Uses PostgreSQL/Neon (production)
- * 
- * The SQLite database will be created at: live-coding/payload-local.db
+ * Configure DATABASE_URL in your .env file:
+ *   DATABASE_URL=postgresql://user:password@host:port/database
  */
 
 import { postgresAdapter } from '@payloadcms/db-postgres'
-import { sqliteAdapter } from '@payloadcms/db-sqlite'
-
-const useLocalDB = process.env.USE_LOCAL_DB === 'true'
 
 export function getDbAdapter() {
-  if (useLocalDB) {
-    console.log('📦 Using LOCAL SQLite database (payload-local.db)')
-    return sqliteAdapter({
-      client: {
-        url: 'file:./payload-local.db',
-      },
-    })
-  }
-
   console.log('☁️ Using REMOTE PostgreSQL (Neon) database')
   return postgresAdapter({
     pool: {
@@ -32,8 +17,6 @@ export function getDbAdapter() {
     },
   })
 }
-
-export { useLocalDB }
 
 
 
