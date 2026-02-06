@@ -112,14 +112,19 @@ export async function POST(
     }
     
     // Update this student's scratchpad
-    scratchpads[user.id] = {
+    const updatedScratchpad: any = {
       code: fileContent, // Store code (from file or provided)
       language: fileLanguage,
       updatedAt: new Date().toISOString(),
       studentName: user.name || user.email || 'Anonymous',
-      ...(output && { output }),
-      ...(workspaceFileId && { workspaceFileId, workspaceFileName }),
     }
+    if (output) updatedScratchpad.output = output
+    if (workspaceFileId) {
+      updatedScratchpad.workspaceFileId = workspaceFileId
+      updatedScratchpad.workspaceFileName = workspaceFileName
+    }
+
+    scratchpads[user.id] = updatedScratchpad
 
     // Update session with new scratchpads
     await payload.update({

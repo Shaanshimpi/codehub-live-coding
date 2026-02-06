@@ -95,8 +95,7 @@ export async function GET(
     
     // Fallback to session language if file-based inference didn't work
     if (!languageSlug && session.language && typeof session.language === 'object') {
-      // @ts-expect-error - payload typed as any
-      languageSlug = session.language.slug || null
+      languageSlug = (session.language as any).slug || null
     }
 
     // Calculate participant count from actual studentScratchpads array

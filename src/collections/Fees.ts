@@ -126,11 +126,6 @@ export const Fees: CollectionConfig = {
       ],
       admin: {
         description: 'Installment schedule',
-        components: {
-          RowLabel: ({ data }) => {
-            return `Installment: ${data?.amount || 0} ${data?.currency || 'INR'} - Due: ${data?.dueDate ? new Date(data.dueDate).toLocaleDateString() : 'N/A'}`
-          },
-        },
       },
     },
     {

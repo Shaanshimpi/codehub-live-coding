@@ -3,7 +3,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor, { useMonaco } from '@monaco-editor/react'
 import { Play, Square, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
-import type { editor as MonacoEditor } from 'monaco-editor'
 import { LiveCodePlaygroundProps, SUPPORTED_LANGUAGES } from './types'
 
 export function LiveCodePlayground({
@@ -22,7 +21,7 @@ export function LiveCodePlayground({
   runDisabled = false,
   allowRunInReadOnly = false,
 }: LiveCodePlaygroundProps) {
-  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const editorRef = useRef<any>(null)
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
   const monaco = useMonaco()
@@ -44,14 +43,14 @@ export function LiveCodePlayground({
     onRun(currentCode, showInput ? input : undefined)
   }, [code, input, showInput, onRun, runDisabled])
 
-  const handleEditorDidMount = useCallback((editor: MonacoEditor.IStandaloneCodeEditor) => {
+  const handleEditorDidMount = useCallback((editor: any) => {
     editorRef.current = editor
 
       // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
       if (monaco) {
         editor.addCommand(
           // eslint-disable-next-line no-bitwise
-          monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+          (monaco as any).KeyMod.CtrlCmd | (monaco as any).KeyCode.Enter,
           () => {
             if ((!readOnly || allowRunInReadOnly) && !executing && !runDisabled) {
               handleRun()
@@ -62,9 +61,9 @@ export function LiveCodePlayground({
       // Disable copy/select when readOnly
       if (readOnly) {
         // Disable all copy shortcuts
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {})
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA, () => {})
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {}) // Cut
+        editor.addCommand((monaco as any).KeyMod.CtrlCmd | (monaco as any).KeyCode.KeyC, () => {})
+        editor.addCommand((monaco as any).KeyMod.CtrlCmd | (monaco as any).KeyCode.KeyA, () => {})
+        editor.addCommand((monaco as any).KeyMod.CtrlCmd | (monaco as any).KeyCode.KeyX, () => {}) // Cut
       }
     }
     

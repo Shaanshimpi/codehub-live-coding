@@ -201,7 +201,7 @@ export function StudentSessionClient() {
         }).catch(() => {}) // Silently fail - this is just for trainer visibility
       }
     } catch (error) {
-      const errorResult = {
+      const errorResult: ExecutionResult = {
         stdout: '',
         stderr: error instanceof Error ? error.message : 'Unknown error occurred',
         status: 'error',

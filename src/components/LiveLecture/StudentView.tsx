@@ -9,8 +9,8 @@ import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import {
   getCurrentSnapshot,
   subscribeToEvents,
-  type CodeSnapshot,
 } from '@/services/liveSessionStore'
+import type { CodeSnapshot } from '@/types/live-session'
 
 interface StudentViewProps {
   lectureId: string

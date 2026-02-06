@@ -236,15 +236,20 @@ export function AIAssistantPanel({
             >
               <ReactMarkdown
                 components={{
-                  code({ node, inline, className, children, ...props }) {
+                  code({ node, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '')
-                    return !inline && match ? (
+                    const isInline = !match
+                    
+                    // Remove ref from props as it causes type conflicts with SyntaxHighlighter
+                    const { ref, ...rest } = props as any
+
+                    return !isInline ? (
                       <SyntaxHighlighter
-                        style={vscDarkPlus}
+                        style={vscDarkPlus as any}
                         language={match[1]}
                         PreTag="div"
                         className="text-xs"
-                        {...props}
+                        {...rest}
                       >
                         {String(children).replace(/\n$/, '')}
                       </SyntaxHighlighter>
