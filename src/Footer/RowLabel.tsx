@@ -9,5 +9,5 @@ export const RowLabel: React.FC<RowLabelProps> = () => {
     ? `Nav item ${data.rowNumber !== undefined ? data.rowNumber + 1 : ''}: ${data?.data?.link?.label}`
     : 'Row'
 
-  return <div>{label}</div>
+  return <div> {label}</div>
 }
