@@ -14,18 +14,29 @@ export const revalidate = 600
 export default async function Page() {
   const payload = await getPayload({ config: configPromise })
 
-  const posts = await payload.find({
-    collection: 'posts',
-    depth: 1,
-    limit: 12,
-    overrideAccess: false,
-    select: {
-      title: true,
-      slug: true,
-      categories: true,
-      meta: true,
-    },
-  })
+  let posts: any = {
+    docs: [],
+    totalPages: 0,
+    page: 1,
+    totalDocs: 0,
+  }
+
+  try {
+    posts = await payload.find({
+      collection: 'posts',
+      depth: 1,
+      limit: 12,
+      overrideAccess: false,
+      select: {
+        title: true,
+        slug: true,
+        categories: true,
+        meta: true,
+      },
+    })
+  } catch (e) {
+    console.warn('Page: skipping Payload posts lookup (Payload/DB unavailable).')
+  }
 
   return (
     <div className="pt-24 pb-24">
