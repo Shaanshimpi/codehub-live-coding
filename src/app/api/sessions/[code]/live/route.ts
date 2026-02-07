@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
+import { getMeUser } from '@/auth/getMeUser'
+import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
 
 /**
  * GET /api/sessions/[code]/live
@@ -102,6 +104,17 @@ export async function GET(
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
     const participantCount = Object.keys(scratchpads).length
 
+    // Check payment status for students (optional - for frontend to show warnings)
+    let paymentStatus = null
+    try {
+      const { user } = await getMeUser({ nullUserRedirect: undefined })
+      if (user && user.role === 'student') {
+        paymentStatus = await checkStudentPaymentStatus(user.id, request as any)
+      }
+    } catch (error) {
+      // User not authenticated, continue without payment status
+    }
+
     return NextResponse.json({
       code: session.currentCode || '',
       output: session.currentOutput || null,
@@ -111,6 +124,7 @@ export async function GET(
       participantCount,
       trainerWorkspaceFileId: session.trainerWorkspaceFileId || null,
       trainerWorkspaceFileName: session.trainerWorkspaceFileName || null,
+      paymentStatus, // Include payment status for students
     })
   } catch (error) {
     console.error('Error fetching live code:', error)

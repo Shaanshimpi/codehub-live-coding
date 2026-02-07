@@ -3,11 +3,26 @@
 import React, { useState } from 'react'
 import { Radio, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
+import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
+
+interface PaymentStatus {
+  isBlocked: boolean
+  isDueSoon: boolean
+  nextInstallment?: {
+    dueDate: string
+    amount: number
+    paymentMethod?: string
+  }
+  reason?: 'MAINTENANCE_MODE' | 'ADMISSION_NOT_CONFIRMED' | 'PAYMENT_OVERDUE' | 'TRIAL_EXPIRED'
+  daysUntilDue?: number
+  daysOverdue?: number
+}
 
 export function JoinSessionClient() {
   const [joinCode, setJoinCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,6 +74,19 @@ export function JoinSessionClient() {
       )
 
       if (!joinResponse.ok) {
+        // Check if it's a payment-related error
+        if (joinResponse.status === 403) {
+          try {
+            const errorData = await joinResponse.json()
+            if (errorData.paymentStatus) {
+              setPaymentStatus(errorData.paymentStatus)
+              setLoading(false)
+              return
+            }
+          } catch {
+            // Fall through to generic error
+          }
+        }
         setError('Failed to join session. Please try again.')
         setLoading(false)
         return
@@ -70,6 +98,17 @@ export function JoinSessionClient() {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
     }
+  }
+
+  // Show payment blocked screen if student is blocked
+  if (paymentStatus?.isBlocked) {
+    return (
+      <PaymentBlocked
+        reason={paymentStatus.reason}
+        nextInstallment={paymentStatus.nextInstallment}
+        daysOverdue={paymentStatus.daysOverdue}
+      />
+    )
   }
 
   return (

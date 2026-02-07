@@ -1,31 +1,48 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Sun, Moon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useTheme } from '@/providers/Theme'
+import type { Theme } from '@/providers/Theme/types'
 
 export function FloatingLogout() {
-  const [isVisible, setIsVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
+  const [currentTheme, setCurrentTheme] = useState<Theme>('light')
 
-  // Check if user is logged in using cookie (lightweight check)
+  // Get current theme from DOM or localStorage
   useEffect(() => {
-    const checkAuth = () => {
-      // Check cookie (no API call needed)
-      const cookies = document.cookie.split('; ')
-      const tokenCookie = cookies.find((row) => row.startsWith('payload-token='))
-      const hasCookie = Boolean(tokenCookie && tokenCookie.split('=')[1]?.trim())
-      setIsVisible(hasCookie)
+    const getCurrentTheme = (): Theme => {
+      if (typeof window === 'undefined') return 'light'
+      // Check localStorage for theme preference
+      const stored = window.localStorage.getItem('payload-theme')
+      if (stored === 'dark' || stored === 'light') {
+        return stored
+      }
+      // Check DOM attribute
+      const htmlTheme = document.documentElement.getAttribute('data-theme')
+      if (htmlTheme === 'dark' || htmlTheme === 'light') {
+        return htmlTheme
+      }
+      // Check system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      return prefersDark ? 'dark' : 'light'
     }
+    setCurrentTheme(getCurrentTheme())
+  }, [theme])
 
-    // Initial check
-    checkAuth()
-    
-    // Check periodically (less frequent, only cookie check)
-    const interval = setInterval(checkAuth, 5000) // Reduced to 5 seconds
-    return () => clearInterval(interval)
-  }, [])
+  // Update current theme when theme changes
+  useEffect(() => {
+    if (theme) {
+      setCurrentTheme(theme)
+    } else {
+      // If theme is null (auto), check system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      setCurrentTheme(prefersDark ? 'dark' : 'light')
+    }
+  }, [theme])
 
   const handleLogout = async () => {
     setIsLoading(true)
@@ -50,30 +67,40 @@ export function FloatingLogout() {
     }
   }
 
-  // Always show on mount, then hide if not authenticated (better UX)
-  useEffect(() => {
-    // Show immediately, then check auth
-    setIsVisible(true)
-  }, [])
-
-  if (!isVisible) return null
+  const toggleTheme = () => {
+    const newTheme: Theme = currentTheme === 'light' ? 'dark' : 'light'
+    setTheme(newTheme)
+    setCurrentTheme(newTheme)
+  }
 
   return (
-    <button
-      onClick={handleLogout}
-      disabled={isLoading}
-      className="fixed bottom-6 right-6 z-[9999] flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-2xl hover:bg-primary/90 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-primary-foreground/20"
-      style={{ 
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-      }}
-      title="Logout"
-      aria-label="Logout"
-    >
-      <LogOut className="h-4 w-4" />
-      <span className="text-sm font-medium">{isLoading ? 'Logging out...' : 'Logout'}</span>
-    </button>
+    <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3">
+      {/* Theme Switcher */}
+      <button
+        onClick={toggleTheme}
+        className="flex items-center justify-center rounded-full bg-card border-2 border-border px-4 py-3 shadow-2xl hover:bg-accent transition-all hover:scale-105 text-foreground"
+        title={currentTheme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+        aria-label="Toggle theme"
+      >
+        {currentTheme === 'light' ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+      </button>
+
+      {/* Logout Button */}
+      <button
+        onClick={handleLogout}
+        disabled={isLoading}
+        className="flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-2xl hover:bg-primary/90 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-primary-foreground/20"
+        title="Logout"
+        aria-label="Logout"
+      >
+        <LogOut className="h-4 w-4" />
+        <span className="text-sm font-medium">{isLoading ? 'Logging out...' : 'Logout'}</span>
+      </button>
+    </div>
   )
 }
 

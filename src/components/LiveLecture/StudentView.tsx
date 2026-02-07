@@ -220,7 +220,6 @@ export function StudentView({ lectureId }: StudentViewProps) {
                   onRun={() => {}}
                   readOnly={true}
                   executing={false}
-                  theme="vs-dark"
                 />
               </div>
             </div>

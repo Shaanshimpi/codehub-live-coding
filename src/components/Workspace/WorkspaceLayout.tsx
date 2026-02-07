@@ -10,6 +10,11 @@ import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
+import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
+import { PaymentDueModal } from '@/components/Payment/PaymentDueModal'
+import { PaymentGracePeriodModal } from '@/components/Payment/PaymentGracePeriodModal'
+import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
+import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
 
 type WorkspaceFile = {
   id: string
@@ -27,6 +32,11 @@ export function WorkspaceLayout() {
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0) // Force file explorer refresh
+  const [paymentStatus, setPaymentStatus] = useState<any>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
+  const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
+  const [showTrialGraceModal, setShowTrialGraceModal] = useState(false)
 
   // Update code (and infer language from extension) when file changes
   useEffect(() => {
@@ -73,6 +83,53 @@ export function WorkspaceLayout() {
   const handleFileSaved = () => {
     // Refresh file explorer to show updated file
     setRefreshKey((prev) => prev + 1)
+  }
+
+  // Check payment status on mount
+  useEffect(() => {
+    const checkPaymentStatus = async () => {
+      try {
+        const res = await fetch('/api/workspace/files', { credentials: 'include' })
+        if (!res.ok) {
+          if (res.status === 403) {
+            try {
+              const errorData = await res.json()
+              if (errorData.paymentStatus) {
+                setPaymentStatus(errorData.paymentStatus)
+                return
+              }
+            } catch {
+              // Fall through
+            }
+          }
+        } else {
+          const data = await res.json()
+          if (data.paymentStatus) {
+            setPaymentStatus(data.paymentStatus)
+            if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
+              setShowPaymentModal(true)
+            }
+            if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
+              setShowGracePeriodModal(true)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error)
+      }
+    }
+    checkPaymentStatus()
+  }, [])
+
+  // Show payment blocked screen if student is blocked
+  if (paymentStatus?.isBlocked) {
+    return (
+      <PaymentBlocked
+        reason={paymentStatus.reason}
+        nextInstallment={paymentStatus.nextInstallment}
+        daysOverdue={paymentStatus.daysOverdue}
+      />
+    )
   }
 
   return (
@@ -215,6 +272,45 @@ export function WorkspaceLayout() {
           </div>
         )}
       </div>
+
+      {/* Payment Due Modal */}
+      {paymentStatus?.isDueSoon && paymentStatus.nextInstallment && (
+        <PaymentDueModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          nextInstallment={paymentStatus.nextInstallment}
+          daysUntilDue={paymentStatus.daysUntilDue || 0}
+        />
+      )}
+
+      {/* Grace Period Modal */}
+      {paymentStatus?.isInGracePeriod && paymentStatus.nextInstallment && (
+        <PaymentGracePeriodModal
+          isOpen={showGracePeriodModal}
+          onClose={() => setShowGracePeriodModal(false)}
+          nextInstallment={paymentStatus.nextInstallment}
+          daysRemaining={paymentStatus.daysRemainingInGracePeriod || 0}
+        />
+      )}
+
+      {/* Trial Ending Soon Modal */}
+      {paymentStatus?.isTrialEndingSoon && paymentStatus.trialEndDate && (
+        <TrialEndingSoonModal
+          isOpen={showTrialEndingModal}
+          onClose={() => setShowTrialEndingModal(false)}
+          trialEndDate={paymentStatus.trialEndDate}
+          daysUntilEnd={paymentStatus.daysUntilTrialEnd || 0}
+        />
+      )}
+
+      {/* Trial Grace Period Modal */}
+      {paymentStatus?.isTrialInGracePeriod && paymentStatus.trialEndDate && (
+        <TrialGracePeriodModal
+          isOpen={showTrialGraceModal}
+          onClose={() => setShowTrialGraceModal(false)}
+          trialEndDate={paymentStatus.trialEndDate}
+        />
+      )}
     </div>
   )
 }

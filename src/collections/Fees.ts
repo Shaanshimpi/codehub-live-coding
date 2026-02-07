@@ -1,4 +1,6 @@
 import type { CollectionConfig } from 'payload'
+import { getPayload } from 'payload'
+import config from '@payload-config'
 
 import { adminOnly } from '@/access/adminOnly'
 import { authenticated } from '@/access/authenticated'
@@ -56,7 +58,7 @@ export const Fees: CollectionConfig = {
       required: true,
       defaultValue: 'INR',
       admin: {
-        description: 'Currency code',
+        description: 'Currency code (e.g., INR, USD, EUR)',
       },
     },
     {
@@ -94,17 +96,10 @@ export const Fees: CollectionConfig = {
         },
         {
           name: 'paymentMethod',
-          type: 'select',
+          type: 'text',
           admin: {
-            description: 'Payment method used',
+            description: 'Payment method used (e.g., cash, upi, card, bank_transfer)',
           },
-          options: [
-            { label: 'Cash', value: 'cash' },
-            { label: 'UPI', value: 'upi' },
-            { label: 'Card', value: 'card' },
-            { label: 'Bank Transfer', value: 'bank_transfer' },
-            { label: 'Other', value: 'other' },
-          ],
         },
         {
           name: 'paidAt',

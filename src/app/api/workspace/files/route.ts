@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
+import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
 
 /**
  * GET /api/workspace/files
@@ -25,6 +26,22 @@ export async function GET(request: NextRequest) {
         { error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    // Check payment status for students
+    let paymentStatus = null
+    if (user.role === 'student') {
+      paymentStatus = await checkStudentPaymentStatus(user.id, request as any)
+      if (paymentStatus.isBlocked) {
+        return NextResponse.json(
+          { 
+            error: paymentStatus.reason || 'PAYMENT_REQUIRED',
+            message: 'Access blocked due to payment status',
+            paymentStatus,
+          },
+          { status: 403 }
+        )
+      }
     }
 
     const payload = await getPayload({ config })
@@ -113,6 +130,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       files: filesList,
+      paymentStatus, // Include payment status for students
     })
   } catch (error) {
     console.error('Error fetching workspace files:', error)

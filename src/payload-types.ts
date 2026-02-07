@@ -1005,7 +1005,7 @@ export interface Fee {
    */
   totalFee: number;
   /**
-   * Currency code
+   * Currency code (e.g., INR, USD, EUR)
    */
   currency: string;
   /**
@@ -1025,9 +1025,9 @@ export interface Fee {
      */
     isPaid?: boolean | null;
     /**
-     * Payment method used
+     * Payment method used (e.g., cash, upi, card, bank_transfer)
      */
-    paymentMethod?: ('cash' | 'upi' | 'card' | 'bank_transfer' | 'other') | null;
+    paymentMethod?: string | null;
     /**
      * Date when payment was received
      */

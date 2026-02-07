@@ -94,7 +94,6 @@ export function TrainerView({
             executing={executing}
             showAIHelper={true}
             onAIRequest={() => setShowAI(true)}
-            theme="vs-dark"
           />
         </div>
 

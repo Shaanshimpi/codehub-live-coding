@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { Save, CheckCircle } from 'lucide-react'
 import { SUPPORTED_LANGUAGES, type ExecutionResult } from '@/components/LiveCodePlayground/types'
+import { useTheme } from '@/providers/Theme'
 
 interface WorkspaceEditorProps {
   fileId: string
@@ -101,6 +102,10 @@ export function WorkspaceEditor({
 
   const currentLanguage = SUPPORTED_LANGUAGES.find((lang) => lang.id === language)
   const monacoLanguage = currentLanguage?.monacoLanguage || 'javascript'
+  const { theme: appTheme } = useTheme()
+  
+  // Determine Monaco theme based on app theme
+  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'vs'
 
   return (
     <div className="flex h-full flex-col">
@@ -156,7 +161,7 @@ export function WorkspaceEditor({
           executing={executing}
           executionResult={executionResult}
           showAIHelper={false} // AI is in sidebar
-          theme="vs-dark"
+          theme={monacoTheme}
           readOnly={readOnly}
           runDisabled={runDisabled}
           allowRunInReadOnly={allowRunInReadOnly}

@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
+import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
 
 /**
  * POST /api/sessions/[code]/join
@@ -31,6 +32,22 @@ export async function POST(
         { error: 'Unauthorized' },
         { status: 401 }
       )
+    }
+
+    // Check payment status for students
+    let paymentStatus = null
+    if (user.role === 'student') {
+      paymentStatus = await checkStudentPaymentStatus(user.id, request as any)
+      if (paymentStatus.isBlocked) {
+        return NextResponse.json(
+          { 
+            error: paymentStatus.reason || 'PAYMENT_REQUIRED',
+            message: 'Access blocked due to payment status',
+            paymentStatus,
+          },
+          { status: 403 }
+        )
+      }
     }
 
     const payload = await getPayload({ config })
@@ -91,6 +108,7 @@ export async function POST(
       title: session.title,
       language: languageName,
       participantCount,
+      paymentStatus, // Include payment status for students
     })
   } catch (error) {
     console.error('Error joining session:', error)

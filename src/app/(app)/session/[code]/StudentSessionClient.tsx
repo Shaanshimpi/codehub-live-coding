@@ -17,8 +17,35 @@ import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import { File, ChevronDown } from 'lucide-react'
+import { PaymentDueModal } from '@/components/Payment/PaymentDueModal'
+import { PaymentGracePeriodModal } from '@/components/Payment/PaymentGracePeriodModal'
+import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
+import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
+import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
+import { useTheme } from '@/providers/Theme'
 
 type ActiveTab = 'trainer' | 'scratchpad'
+
+type PaymentStatus = {
+  isBlocked: boolean
+  isDueSoon: boolean
+  isInGracePeriod?: boolean
+  nextInstallment?: {
+    dueDate: string
+    amount: number
+    paymentMethod?: string
+  }
+  trialEndDate?: string | null
+  isTrialEndingSoon?: boolean
+  isTrialInGracePeriod?: boolean
+  daysUntilTrialEnd?: number
+  daysTrialOverdue?: number
+  daysRemainingInTrialGracePeriod?: number
+  reason?: 'MAINTENANCE_MODE' | 'ADMISSION_NOT_CONFIRMED' | 'PAYMENT_OVERDUE' | 'TRIAL_EXPIRED'
+  daysUntilDue?: number
+  daysOverdue?: number
+  daysRemainingInGracePeriod?: number
+}
 
 type LiveSessionLiveResponse = {
   code: string
@@ -29,6 +56,7 @@ type LiveSessionLiveResponse = {
   participantCount: number
   trainerWorkspaceFileId: string | null
   trainerWorkspaceFileName: string | null
+  paymentStatus?: PaymentStatus | null
 }
 
 function normalizeCodeParam(codeParam: string | string[] | undefined): string {
@@ -52,6 +80,10 @@ function mapOutputToExecutionResult(output: any): ExecutionResult | null {
 export function StudentSessionClient() {
   const params = useParams<{ code: string }>()
   const router = useRouter()
+  const { theme: appTheme } = useTheme()
+  
+  // Determine Monaco theme based on app theme
+  const monacoTheme = appTheme === 'dark' ? 'vs-dark' : 'vs'
 
   const joinCode = useMemo(() => normalizeCodeParam(params?.code), [params])
 
@@ -88,6 +120,29 @@ export function StudentSessionClient() {
   const [fileSelectionComplete, setFileSelectionComplete] = useState(false)
   const [showFileDropdown, setShowFileDropdown] = useState(false)
 
+  // Payment status
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
+  const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
+  const [showTrialGraceModal, setShowTrialGraceModal] = useState(false)
+
+  // Debug: Log payment status changes
+  useEffect(() => {
+    if (paymentStatus) {
+      console.log('Payment Status Updated:', {
+        isBlocked: paymentStatus.isBlocked,
+        isDueSoon: paymentStatus.isDueSoon,
+        daysUntilDue: paymentStatus.daysUntilDue,
+        nextInstallment: paymentStatus.nextInstallment,
+        showPaymentModal,
+      })
+      if (paymentStatus.isDueSoon && paymentStatus.nextInstallment) {
+        console.log('Should show payment modal!')
+      }
+    }
+  }, [paymentStatus, showPaymentModal])
+
   const pollLive = useCallback(async () => {
     if (!joinCode) return
 
@@ -117,6 +172,53 @@ export function StudentSessionClient() {
         setHasNewTrainerUpdate(true)
       }
 
+      // Handle payment status
+      if (data.paymentStatus) {
+        setPaymentStatus(data.paymentStatus)
+        // Show modal if payment is due soon
+        if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
+          // Use functional update to avoid stale closure
+          setShowPaymentModal((prev) => {
+            // Only show if not already shown (avoid re-showing on every poll)
+            if (!prev) {
+              return true
+            }
+            return prev
+          })
+        }
+        // Show grace period modal if in grace period
+        if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
+          setShowGracePeriodModal((prev) => {
+            if (!prev) {
+              return true
+            }
+            return prev
+          })
+        }
+        // Show trial ending soon modal
+        if (data.paymentStatus.isTrialEndingSoon && data.paymentStatus.trialEndDate) {
+          setShowTrialEndingModal((prev) => {
+            if (!prev) {
+              return true
+            }
+            return prev
+          })
+        }
+        // Show trial grace period modal
+        if (data.paymentStatus.isTrialInGracePeriod && data.paymentStatus.trialEndDate) {
+          setShowTrialGraceModal((prev) => {
+            if (!prev) {
+              return true
+            }
+            return prev
+          })
+        }
+        // If blocked, show blocking screen (shouldn't happen here, but handle it)
+        if (data.paymentStatus.isBlocked) {
+          setError('Access blocked due to payment status')
+        }
+      }
+
       setLoading(false)
       setError(null)
     } catch (e) {
@@ -139,7 +241,53 @@ export function StudentSessionClient() {
 
     async function join() {
       try {
-        await fetch(`/api/sessions/${joinCode}/join`, { method: 'POST' })
+        const joinRes = await fetch(`/api/sessions/${joinCode}/join`, { method: 'POST' })
+        if (!joinRes.ok) {
+          // Check if it's a payment-related error
+          if (joinRes.status === 403) {
+            try {
+              const errorData = await joinRes.json()
+              if (errorData.paymentStatus) {
+                setPaymentStatus(errorData.paymentStatus)
+                setLoading(false)
+                return
+              }
+            } catch {
+              // Fall through
+            }
+          }
+        } else {
+          // Check payment status from successful join response
+          try {
+            const joinData = await joinRes.json()
+            if (joinData.paymentStatus) {
+              setPaymentStatus(joinData.paymentStatus)
+              // Show modal if payment is due soon
+              if (joinData.paymentStatus.isDueSoon && joinData.paymentStatus.nextInstallment) {
+                console.log('Payment due soon from join:', {
+                  isDueSoon: joinData.paymentStatus.isDueSoon,
+                  daysUntilDue: joinData.paymentStatus.daysUntilDue,
+                  nextInstallment: joinData.paymentStatus.nextInstallment,
+                })
+                setShowPaymentModal(true)
+              }
+              // Show grace period modal if in grace period
+              if (joinData.paymentStatus.isInGracePeriod && joinData.paymentStatus.nextInstallment) {
+                setShowGracePeriodModal(true)
+              }
+              // Show trial ending soon modal
+              if (joinData.paymentStatus.isTrialEndingSoon && joinData.paymentStatus.trialEndDate) {
+                setShowTrialEndingModal(true)
+              }
+              // Show trial grace period modal
+              if (joinData.paymentStatus.isTrialInGracePeriod && joinData.paymentStatus.trialEndDate) {
+                setShowTrialGraceModal(true)
+              }
+            }
+          } catch {
+            // Ignore JSON parse errors
+          }
+        }
       } catch {
         // ignore
       }
@@ -172,6 +320,51 @@ export function StudentSessionClient() {
     }
   }, [joinCode, pollLive])
   
+  // Check payment status on mount (dedicated check)
+  useEffect(() => {
+    const checkPaymentStatus = async () => {
+      try {
+        const res = await fetch('/api/user/payment-status', {
+          credentials: 'include',
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.paymentStatus) {
+            setPaymentStatus(data.paymentStatus)
+            // Show modal if payment is due soon
+            if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
+              console.log('Payment due soon detected:', {
+                isDueSoon: data.paymentStatus.isDueSoon,
+                daysUntilDue: data.paymentStatus.daysUntilDue,
+                nextInstallment: data.paymentStatus.nextInstallment,
+              })
+            // Show modal immediately
+            setShowPaymentModal(true)
+            }
+            // Show grace period modal if in grace period
+            if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
+              setShowGracePeriodModal(true)
+            }
+            // Show trial ending soon modal
+            if (data.paymentStatus.isTrialEndingSoon && data.paymentStatus.trialEndDate) {
+              setShowTrialEndingModal(true)
+            }
+            // Show trial grace period modal
+            if (data.paymentStatus.isTrialInGracePeriod && data.paymentStatus.trialEndDate) {
+              setShowTrialGraceModal(true)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking payment status:', error)
+      }
+    }
+    
+    if (joinCode) {
+      checkPaymentStatus()
+    }
+  }, [joinCode])
+
   // Load trainer code once on mount
   useEffect(() => {
     if (joinCode && fileSelectionComplete) {
@@ -430,6 +623,17 @@ export function StudentSessionClient() {
     )
   }
 
+  // Show payment blocked screen if student is blocked
+  if (paymentStatus?.isBlocked) {
+    return (
+      <PaymentBlocked
+        reason={paymentStatus.reason}
+        nextInstallment={paymentStatus.nextInstallment}
+        daysOverdue={paymentStatus.daysOverdue}
+      />
+    )
+  }
+
   if (error) {
     return (
       <div className="container mx-auto py-16 space-y-4">
@@ -669,7 +873,7 @@ export function StudentSessionClient() {
                   readOnly
                   executing={false}
                   showAIHelper={false}
-                  theme="vs-dark"
+                  theme={monacoTheme}
                 />
               </div>
 
@@ -734,7 +938,7 @@ export function StudentSessionClient() {
                   executing={scratchpadExecuting}
                   showAIHelper
                   onAIRequest={() => setShowAI(true)}
-                  theme="vs-dark"
+                  theme={monacoTheme}
                 />
               </div>
 
@@ -785,6 +989,53 @@ export function StudentSessionClient() {
           }
         }}
       />
+
+      {/* Payment Due Modal */}
+      {paymentStatus?.isDueSoon && paymentStatus.nextInstallment && (
+        <PaymentDueModal
+          isOpen={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false)
+          }}
+          nextInstallment={paymentStatus.nextInstallment}
+          daysUntilDue={paymentStatus.daysUntilDue || 0}
+        />
+      )}
+
+      {/* Grace Period Modal */}
+      {paymentStatus?.isInGracePeriod && paymentStatus.nextInstallment && (
+        <PaymentGracePeriodModal
+          isOpen={showGracePeriodModal}
+          onClose={() => {
+            setShowGracePeriodModal(false)
+          }}
+          nextInstallment={paymentStatus.nextInstallment}
+          daysRemaining={paymentStatus.daysRemainingInGracePeriod || 0}
+        />
+      )}
+
+      {/* Trial Ending Soon Modal */}
+      {paymentStatus?.isTrialEndingSoon && paymentStatus.trialEndDate && (
+        <TrialEndingSoonModal
+          isOpen={showTrialEndingModal}
+          onClose={() => {
+            setShowTrialEndingModal(false)
+          }}
+          trialEndDate={paymentStatus.trialEndDate}
+          daysUntilEnd={paymentStatus.daysUntilTrialEnd || 0}
+        />
+      )}
+
+      {/* Trial Grace Period Modal */}
+      {paymentStatus?.isTrialInGracePeriod && paymentStatus.trialEndDate && (
+        <TrialGracePeriodModal
+          isOpen={showTrialGraceModal}
+          onClose={() => {
+            setShowTrialGraceModal(false)
+          }}
+          trialEndDate={paymentStatus.trialEndDate}
+        />
+      )}
     </div>
   )
 }

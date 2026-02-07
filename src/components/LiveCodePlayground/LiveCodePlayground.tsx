@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor, { useMonaco } from '@monaco-editor/react'
 import { Play, Square, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { LiveCodePlaygroundProps, SUPPORTED_LANGUAGES } from './types'
+import { useTheme } from '@/providers/Theme'
 
 export function LiveCodePlayground({
   language,
@@ -17,7 +18,7 @@ export function LiveCodePlayground({
   executionResult = null,
   onStopExecution,
   height = '100%',
-  theme = 'vs-dark',
+  theme: themeProp,
   runDisabled = false,
   allowRunInReadOnly = false,
 }: LiveCodePlaygroundProps) {
@@ -25,13 +26,10 @@ export function LiveCodePlayground({
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
   const monaco = useMonaco()
-
-  // Update editor content when code prop changes
-  useEffect(() => {
-    if (editorRef.current && editorRef.current.getValue() !== code) {
-      editorRef.current.setValue(code)
-    }
-  }, [code])
+  const { theme: appTheme } = useTheme()
+  
+  // Determine Monaco theme based on app theme or prop
+  const monacoTheme = themeProp || (appTheme === 'dark' ? 'vs-dark' : 'vs')
 
   const currentLanguage = SUPPORTED_LANGUAGES.find((lang) => lang.id === language)
   const monacoLanguage = currentLanguage?.monacoLanguage || 'javascript'
@@ -96,11 +94,17 @@ export function LiveCodePlayground({
     }
   }, [onAIRequest])
 
-  // Sync theme with app theme
+  // Update Monaco theme when app theme changes
   useEffect(() => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
-    // Theme is already set via prop, but we could react to changes here
-  }, [])
+    if (monaco && editorRef.current && !themeProp) {
+      const newTheme = appTheme === 'dark' ? 'vs-dark' : 'vs'
+      // Monaco editor will automatically update when theme prop changes
+      // But we can also use monaco.editor.setTheme() if needed
+      if (monaco.editor) {
+        monaco.editor.setTheme(newTheme)
+      }
+    }
+  }, [appTheme, monaco, themeProp])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -200,10 +204,10 @@ export function LiveCodePlayground({
         <Editor
           height={height}
           language={monacoLanguage}
-          defaultValue={code}
+          value={code}
           onChange={(value) => onChange(value || '')}
           onMount={handleEditorDidMount}
-          theme={theme}
+          theme={monacoTheme}
           options={{
             readOnly,
             minimap: { enabled: true },

@@ -77,7 +77,12 @@ export const PlatformSettings: GlobalConfig = {
               name: 'availablePaymentMethods',
               type: 'array',
               required: true,
-              defaultValue: ['cash', 'upi', 'card', 'bank_transfer'],
+              defaultValue: [
+                { method: 'cash' },
+                { method: 'upi' },
+                { method: 'card' },
+                { method: 'bank_transfer' },
+              ],
               fields: [
                 {
                   name: 'method',

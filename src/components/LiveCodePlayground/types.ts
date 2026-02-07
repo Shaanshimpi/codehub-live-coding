@@ -29,7 +29,7 @@ export interface LiveCodePlaygroundProps {
   executionResult?: ExecutionResult | null
   onStopExecution?: () => void
   height?: string | number
-  theme?: 'vs-dark' | 'light'
+  theme?: 'vs-dark' | 'vs'
   runDisabled?: boolean // Disable Run button (e.g., when code has unsaved changes)
   allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
 }
