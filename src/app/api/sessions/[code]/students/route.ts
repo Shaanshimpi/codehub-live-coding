@@ -62,18 +62,8 @@ export async function GET(
 
     const session = sessions.docs[0]
 
-    // Verify trainer owns this session (unless admin)
-    if (user.role !== 'admin') {
-      const trainerId = typeof session.trainer === 'object' 
-        ? session.trainer.id 
-        : session.trainer
-      if (trainerId !== user.id) {
-        return NextResponse.json(
-          { error: 'Unauthorized - you are not the trainer for this session' },
-          { status: 403 }
-        )
-      }
-    }
+    // Any staff member (admin or trainer) can access any session
+    // No ownership check needed
 
     // Get student scratchpads
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}

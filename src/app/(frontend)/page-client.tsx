@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { FolderOpen, PlayCircle, Radio } from 'lucide-react'
+import { FolderOpen, PlayCircle, Radio, Monitor } from 'lucide-react'
 
 interface User {
   id: string
@@ -173,6 +173,17 @@ export function HomePageClient() {
         >
           <PlayCircle className="h-5 w-5" />
           Start Session
+        </Link>
+      )}
+
+      {/* Monitor Session Button - Only for trainers and admins */}
+      {isTrainerOrAdmin && (
+        <Link
+          href="/staff/monitor"
+          className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-medium hover:bg-secondary/90 transition-colors shadow-lg border"
+        >
+          <Monitor className="h-5 w-5" />
+          Monitor Session
         </Link>
       )}
 

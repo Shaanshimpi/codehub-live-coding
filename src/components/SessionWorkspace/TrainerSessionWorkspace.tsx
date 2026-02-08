@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { FileExplorer } from '@/components/Workspace/FileExplorer'
 import { WorkspaceEditor } from '@/components/Workspace/WorkspaceEditor'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
+import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
 import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
+import { useTheme } from '@/providers/Theme'
 
 type WorkspaceFile = {
   id: string
@@ -72,6 +74,16 @@ export function TrainerSessionWorkspace({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [switchingFile, setSwitchingFile] = useState(false)
   const [lastSavedCode, setLastSavedCode] = useState<string>('') // Track last saved code to enable/disable Run button
+  
+  // Local student code edits (not synced with students)
+  const [localStudentEdits, setLocalStudentEdits] = useState<Record<string, {
+    code: string
+    language: string
+    executing: boolean
+    executionResult: ExecutionResult | null
+  }>>({})
+  
+  const { theme: appTheme } = useTheme()
 
   // Load active file from session on mount
   useEffect(() => {
@@ -333,6 +345,99 @@ export function TrainerSessionWorkspace({
     setRefreshKey((prev) => prev + 1)
   }
 
+  // Handler to initialize or update local student code
+  const handleStudentCodeChange = useCallback((studentId: string, code: string) => {
+    setLocalStudentEdits((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        code,
+        language: prev[studentId]?.language || 'javascript',
+        executing: prev[studentId]?.executing || false,
+        executionResult: prev[studentId]?.executionResult || null,
+      },
+    }))
+  }, [])
+
+  // Handler to change student code language
+  const handleStudentLanguageChange = useCallback((studentId: string, language: string) => {
+    setLocalStudentEdits((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        language,
+        code: prev[studentId]?.code || '',
+        executing: prev[studentId]?.executing || false,
+        executionResult: null, // Clear output when language changes
+      },
+    }))
+  }, [])
+
+  // Handler to run student code locally
+  const handleStudentCodeRun = useCallback(async (studentId: string, code: string, language: string, input?: string) => {
+    setLocalStudentEdits((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        executing: true,
+        code: prev[studentId]?.code || code,
+        language: prev[studentId]?.language || language,
+        executionResult: null,
+      },
+    }))
+
+    try {
+      const result = await executeCode(language, code, input)
+      setLocalStudentEdits((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          executing: false,
+          executionResult: result,
+        },
+      }))
+    } catch (e) {
+      console.error('Error running student code:', e)
+      const errorResult: ExecutionResult = {
+        stdout: '',
+        stderr: e instanceof Error ? e.message : 'Unknown error occurred',
+        status: 'error',
+        exitCode: 1,
+      }
+      setLocalStudentEdits((prev) => ({
+        ...prev,
+        [studentId]: {
+          ...prev[studentId],
+          executing: false,
+          executionResult: errorResult,
+        },
+      }))
+    }
+  }, [])
+
+  // Initialize local edits when student is expanded
+  useEffect(() => {
+    students.forEach((student) => {
+      if (expandedStudentIds.has(student.userId)) {
+        setLocalStudentEdits((prev) => {
+          // Only initialize if not already exists
+          if (prev[student.userId]) {
+            return prev
+          }
+          return {
+            ...prev,
+            [student.userId]: {
+              code: student.code || '',
+              language: student.language || 'javascript',
+              executing: false,
+              executionResult: null,
+            },
+          }
+        })
+      }
+    })
+  }, [expandedStudentIds, students])
+
   const handleSaveCode = useCallback(async () => {
     if (!selectedFile || !sessionCode) {
       alert('Please select a file first')
@@ -555,32 +660,95 @@ export function TrainerSessionWorkspace({
                     </button>
                     {isExpanded && (
                       <div className="border-t p-2 space-y-2">
-                        <div>
-                          <div className="text-[10px] font-medium text-muted-foreground mb-1">Code:</div>
-                          <div className="text-xs font-mono bg-muted/30 p-2 rounded max-h-32 overflow-y-auto">
-                            <pre className="whitespace-pre-wrap break-words">{student.code || '// No code yet'}</pre>
-                          </div>
-                        </div>
-                        {student.output && (
-                          <div>
-                            <div className="text-[10px] font-medium text-muted-foreground mb-1">Output:</div>
-                            <div className="text-xs font-mono bg-muted/30 p-2 rounded max-h-32 overflow-y-auto">
-                              {student.output.stdout && (
-                                <div className="whitespace-pre-wrap break-words text-foreground mb-1">
-                                  {student.output.stdout}
-                                </div>
-                              )}
-                              {student.output.stderr && (
-                                <div className="whitespace-pre-wrap break-words text-destructive">
-                                  {student.output.stderr}
-                                </div>
-                              )}
-                              {!student.output.stdout && !student.output.stderr && (
-                                <div className="text-muted-foreground">No output</div>
-                              )}
+                        {/* Local editable code editor */}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-[10px] font-medium text-muted-foreground">
+                              Code (Local Edit - Not Synced):
                             </div>
+                            <select
+                              value={localStudentEdits[student.userId]?.language || student.language || 'javascript'}
+                              onChange={(e) => handleStudentLanguageChange(student.userId, e.target.value)}
+                              className="rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
+                            >
+                              {SUPPORTED_LANGUAGES.map((lang) => (
+                                <option key={lang.id} value={lang.id}>
+                                  {lang.name}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                        )}
+                          <div className="h-64 border rounded-md overflow-hidden">
+                            <LiveCodePlayground
+                              language={localStudentEdits[student.userId]?.language || student.language || 'javascript'}
+                              code={(localStudentEdits[student.userId]?.code ?? student.code) || '// No code yet'}
+                              onChange={(newCode) => handleStudentCodeChange(student.userId, newCode)}
+                              onRun={(currentCode, input) => {
+                                const lang = localStudentEdits[student.userId]?.language || student.language || 'javascript'
+                                handleStudentCodeRun(student.userId, currentCode, lang, input)
+                              }}
+                              readOnly={false}
+                              theme={appTheme === 'dark' ? 'vs-dark' : 'vs'}
+                              height="100%"
+                              runDisabled={false}
+                              executing={localStudentEdits[student.userId]?.executing || false}
+                              executionResult={localStudentEdits[student.userId]?.executionResult || null}
+                              onStopExecution={() => {
+                                setLocalStudentEdits((prev) => ({
+                                  ...prev,
+                                  [student.userId]: {
+                                    ...prev[student.userId],
+                                    executing: false,
+                                  },
+                                }))
+                              }}
+                            />
+                          </div>
+                          {/* Local execution output */}
+                          {localStudentEdits[student.userId]?.executionResult && (
+                            <div className="border rounded-md bg-muted/30">
+                              <div className="text-[10px] font-medium text-muted-foreground p-2 border-b">
+                                Local Execution Output:
+                              </div>
+                              <OutputPanel
+                                result={localStudentEdits[student.userId]!.executionResult}
+                                executing={localStudentEdits[student.userId]?.executing || false}
+                                onClear={() => {
+                                  setLocalStudentEdits((prev) => ({
+                                    ...prev,
+                                    [student.userId]: {
+                                      ...prev[student.userId],
+                                      executionResult: null,
+                                    },
+                                  }))
+                                }}
+                              />
+                            </div>
+                          )}
+                          {/* Original student output (if exists) - show as reference */}
+                          {student.output && (
+                            <div className="border rounded-md bg-muted/10">
+                              <div className="text-[10px] font-medium text-muted-foreground p-2 border-b">
+                                Student&apos;s Original Output (Reference):
+                              </div>
+                              <div className="text-xs font-mono bg-muted/30 p-2 max-h-32 overflow-y-auto">
+                                {student.output.stdout && (
+                                  <div className="whitespace-pre-wrap break-words text-foreground mb-1">
+                                    {student.output.stdout}
+                                  </div>
+                                )}
+                                {student.output.stderr && (
+                                  <div className="whitespace-pre-wrap break-words text-destructive">
+                                    {student.output.stderr}
+                                  </div>
+                                )}
+                                {!student.output.stdout && !student.output.stderr && (
+                                  <div className="text-muted-foreground">No output</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
