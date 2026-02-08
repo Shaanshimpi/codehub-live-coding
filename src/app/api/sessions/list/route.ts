@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * GET /api/sessions/list
@@ -18,18 +19,12 @@ export async function GET(request: NextRequest) {
       user = result.user
     } catch (error) {
       // User not authenticated
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Session expired', 401)
     }
     
     // Verify user is staff (admin or trainer)
     if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Unauthorized - staff access required' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized - staff access required', 401)
     }
 
     const payload = await getPayload({ config })

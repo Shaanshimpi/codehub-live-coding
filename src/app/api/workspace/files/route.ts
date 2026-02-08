@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
 import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * GET /api/workspace/files
@@ -18,14 +19,11 @@ export async function GET(request: NextRequest) {
       const result = await getMeUser({ nullUserRedirect: undefined })
       user = result.user
     } catch (error) {
-      return NextResponse.redirect(new URL('/', request.url))
+      return createAuthErrorResponse('Session expired', 401)
     }
 
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized', 401)
     }
 
     // Check payment status for students

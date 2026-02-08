@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * POST /api/sessions/[code]/scratchpad
@@ -26,12 +27,16 @@ export async function POST(
     }
 
     // Get authenticated user (student)
-    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    let user
+    try {
+      const result = await getMeUser({ nullUserRedirect: undefined })
+      user = result.user
+    } catch (error) {
+      return createAuthErrorResponse('Session expired', 401)
+    }
+    
     if (!user || (user.role !== 'student' && user.role !== 'trainer' && user.role !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized', 401)
     }
 
     const body = await request.json()

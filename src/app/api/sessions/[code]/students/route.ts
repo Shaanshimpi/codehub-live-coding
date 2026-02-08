@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * GET /api/sessions/[code]/students
@@ -25,21 +26,17 @@ export async function GET(
     }
 
     // Get authenticated user (must be trainer or admin)
-    // If not authenticated, redirect to home
     let user
     try {
       const result = await getMeUser({ nullUserRedirect: undefined })
       user = result.user
     } catch (error) {
-      // User not authenticated, redirect to home
-      return NextResponse.redirect(new URL('/', request.url))
+      // User not authenticated
+      return createAuthErrorResponse('Session expired', 401)
     }
     
     if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
-      return NextResponse.json(
-        { error: 'Unauthorized - trainer access required' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized - trainer access required', 401)
     }
 
     const payload = await getPayload({ config })

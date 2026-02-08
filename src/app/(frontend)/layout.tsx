@@ -6,6 +6,7 @@ import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
 import { FloatingLogout } from '@/components/FloatingLogout'
+import { AuthErrorHandler } from '@/components/AuthErrorHandler/AuthErrorHandler'
 import { Footer } from '@/Footer/Component'
 import { Header } from '@/Header/Component'
 import { Providers } from '@/providers'
@@ -25,6 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <Providers>
+          <AuthErrorHandler />
           <Header />
           {children}
           <Footer />

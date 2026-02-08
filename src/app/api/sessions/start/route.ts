@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { generateJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * POST /api/sessions/start
@@ -14,20 +15,21 @@ import { getMeUser } from '@/auth/getMeUser'
 export async function POST(request: NextRequest) {
   try {
     // Authenticate user and verify trainer role
-    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    let user
+    try {
+      const result = await getMeUser({ nullUserRedirect: undefined })
+      user = result.user
+    } catch (error) {
+      return createAuthErrorResponse('Session expired', 401)
+    }
+    
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized', 401)
     }
 
     // Verify user is trainer or admin
     if (user.role !== 'trainer' && user.role !== 'admin') {
-      return NextResponse.json(
-        { error: 'Only trainers can create sessions' },
-        { status: 403 }
-      )
+      return createAuthErrorResponse('Only trainers can create sessions', 403)
     }
 
     const body = await request.json()

@@ -4,6 +4,7 @@ import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
 import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * POST /api/sessions/[code]/join
@@ -26,12 +27,16 @@ export async function POST(
     }
 
     // Get authenticated user
-    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    let user
+    try {
+      const result = await getMeUser({ nullUserRedirect: undefined })
+      user = result.user
+    } catch (error) {
+      return createAuthErrorResponse('Session expired', 401)
+    }
+    
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized', 401)
     }
 
     // Check payment status for students

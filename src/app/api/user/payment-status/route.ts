@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMeUser } from '@/auth/getMeUser'
 import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * GET /api/user/payment-status
@@ -10,20 +11,21 @@ import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
  */
 export async function GET(request: NextRequest) {
   try {
-    const { user } = await getMeUser({ nullUserRedirect: undefined })
+    let user
+    try {
+      const result = await getMeUser({ nullUserRedirect: undefined })
+      user = result.user
+    } catch (error) {
+      // User not authenticated
+      return createAuthErrorResponse('Session expired', 401)
+    }
     
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return createAuthErrorResponse('Unauthorized', 401)
     }
 
     if (user.role !== 'student') {
-      return NextResponse.json(
-        { error: 'This endpoint is for students only' },
-        { status: 403 }
-      )
+      return createAuthErrorResponse('This endpoint is for students only', 403)
     }
 
     const paymentStatus = await checkStudentPaymentStatus(user.id, request as any)

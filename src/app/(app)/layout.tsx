@@ -6,6 +6,7 @@ import { GeistSans } from 'geist/font/sans'
 import React from 'react'
 
 import { FloatingLogout } from '@/components/FloatingLogout'
+import { AuthErrorHandler } from '@/components/AuthErrorHandler/AuthErrorHandler'
 import { Providers } from '@/providers'
 import { InitTheme } from '@/providers/Theme/InitTheme'
 import { mergeOpenGraph } from '@/utilities/mergeOpenGraph'
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </head>
       <body suppressHydrationWarning>
         <Providers>
+          <AuthErrorHandler />
           {children}
           <FloatingLogout />
         </Providers>
