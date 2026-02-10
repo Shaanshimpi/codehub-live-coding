@@ -30,9 +30,11 @@ interface FileExplorerProps {
   onFileSelect: (file: File) => void
   selectedFileId?: string
   onFileSaved?: () => void
+  userId?: string | number
+  readOnly?: boolean
 }
 
-export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: FileExplorerProps) {
+export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved, userId, readOnly = false }: FileExplorerProps) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,14 +45,23 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
     try {
       setLoading(true)
       
+      // Determine API endpoints based on userId prop
+      const foldersEndpoint = userId 
+        ? `/api/dashboard/workspace/${userId}/folders`
+        : '/api/folders?limit=1000&depth=2'
+      const filesEndpoint = userId
+        ? `/api/dashboard/workspace/${userId}/files`
+        : '/api/workspace/files'
+      
       // Fetch folders and files using workspace API
       const [foldersRes, filesRes] = await Promise.all([
-        fetch('/api/folders?limit=1000&depth=2'),
-        fetch('/api/workspace/files', { credentials: 'include' }),
+        fetch(foldersEndpoint, { credentials: 'include' }),
+        fetch(filesEndpoint, { credentials: 'include' }),
       ])
 
       if (foldersRes.ok) {
         const foldersData = await foldersRes.json()
+        // Dashboard endpoint returns { docs: [...] }, regular endpoint returns { docs: [...] }
         setFolders(foldersData.docs || [])
       } else if (foldersRes.status === 401 || foldersRes.status === 403) {
         console.warn('Not authenticated - please log in to view workspace')
@@ -59,6 +70,7 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
       if (filesRes.ok) {
         const filesData = await filesRes.json()
         // /api/workspace/files returns { files: [...] } format
+        // /api/dashboard/workspace/[userId]/files also returns { files: [...] } format
         setFiles(filesData.files || filesData.docs || [])
       } else if (filesRes.status === 401 || filesRes.status === 403) {
         console.warn('Not authenticated - please log in to view workspace')
@@ -72,7 +84,7 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [userId]) // Refetch when userId changes
 
   const handleFileClick = (file: File) => {
     onFileSelect(file)
@@ -179,24 +191,26 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
       </div>
 
       {/* Actions */}
-      <div className="border-b bg-muted/30 px-2 py-1.5 flex gap-1">
-        <button
-          onClick={() => setShowCreateFolder(true)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-accent transition-colors"
-          title="New Folder"
-        >
-          <FolderPlus className="h-3 w-3" />
-          Folder
-        </button>
-        <button
-          onClick={() => setShowCreateFile(true)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-accent transition-colors"
-          title="New File"
-        >
-          <FilePlus className="h-3 w-3" />
-          File
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="border-b bg-muted/30 px-2 py-1.5 flex gap-1">
+          <button
+            onClick={() => setShowCreateFolder(true)}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-accent transition-colors"
+            title="New Folder"
+          >
+            <FolderPlus className="h-3 w-3" />
+            Folder
+          </button>
+          <button
+            onClick={() => setShowCreateFile(true)}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs hover:bg-accent transition-colors"
+            title="New File"
+          >
+            <FilePlus className="h-3 w-3" />
+            File
+          </button>
+        </div>
+      )}
 
       {/* File Tree */}
       <div className="flex-1 overflow-y-auto p-2">
@@ -215,8 +229,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
                 files={files}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
-                onFileDelete={handleFileDelete}
-                onFolderDelete={handleFolderDelete}
+                onFileDelete={readOnly ? undefined : handleFileDelete}
+                onFolderDelete={readOnly ? undefined : handleFolderDelete}
                 level={0}
               />
             ))}
@@ -228,8 +242,8 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved }: File
                 file={file}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
-                onFileDelete={handleFileDelete}
-                onFolderDelete={handleFolderDelete}
+                onFileDelete={readOnly ? undefined : handleFileDelete}
+                onFolderDelete={readOnly ? undefined : handleFolderDelete}
                 level={0}
               />
             ))}

@@ -5,6 +5,10 @@ import React from 'react'
 import { WorkspaceLayout } from '@/components/Workspace/WorkspaceLayout'
 
 export function WorkspacePageClient() {
-  return <WorkspaceLayout />
+  return (
+    <div className="flex h-screen w-screen flex-col overflow-hidden">
+      <WorkspaceLayout />
+    </div>
+  )
 }
 

@@ -13,3 +13,4 @@ WHERE email = 'YOUR_EMAIL_HERE';
 -- Verify the change
 SELECT id, name, email, role FROM users WHERE role = 'admin';
 
+

@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
       return createAuthErrorResponse('Session expired', 401)
     }
     
-    // Verify user is staff (admin or trainer)
-    if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
+    // Verify user is staff (admin, manager, or trainer)
+    if (!user || (user.role !== 'trainer' && user.role !== 'admin' && user.role !== 'manager')) {
       return createAuthErrorResponse('Unauthorized - staff access required', 401)
     }
 

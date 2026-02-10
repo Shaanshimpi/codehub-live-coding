@@ -45,7 +45,7 @@ export function FileTreeItem({
   onFolderDelete,
   level,
 }: FileTreeItemProps) {
-  const [isExpanded, setIsExpanded] = useState(true)
+  const [isExpanded, setIsExpanded] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
 
   const handleFileDelete = (e: React.MouseEvent) => {

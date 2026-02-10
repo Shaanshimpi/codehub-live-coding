@@ -434,7 +434,7 @@ export interface User {
   /**
    * User role determines access permissions
    */
-  role: 'admin' | 'trainer' | 'student';
+  role: 'admin' | 'manager' | 'trainer' | 'student';
   /**
    * Primary phone number
    */
@@ -2099,6 +2099,20 @@ export interface PlatformSetting {
    */
   defaultCurrency: string;
   /**
+   * Available currencies for fees
+   */
+  availableCurrencies: {
+    /**
+     * Currency code (e.g., INR, USD, EUR)
+     */
+    code: string;
+    /**
+     * Display label (e.g., INR - Indian Rupee)
+     */
+    label: string;
+    id?: string | null;
+  }[];
+  /**
    * Available payment methods
    */
   availablePaymentMethods: {
@@ -2177,6 +2191,13 @@ export interface PlatformSettingsSelect<T extends boolean = true> {
   warningDaysBeforeDue?: T;
   gracePeriodDays?: T;
   defaultCurrency?: T;
+  availableCurrencies?:
+    | T
+    | {
+        code?: T;
+        label?: T;
+        id?: T;
+      };
   availablePaymentMethods?:
     | T
     | {

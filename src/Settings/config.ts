@@ -74,6 +74,37 @@ export const PlatformSettings: GlobalConfig = {
               },
             },
             {
+              name: 'availableCurrencies',
+              type: 'array',
+              required: true,
+              defaultValue: [
+                { code: 'INR', label: 'INR - Indian Rupee' },
+                { code: 'USD', label: 'USD - US Dollar' },
+                { code: 'EUR', label: 'EUR - Euro' },
+              ],
+              fields: [
+                {
+                  name: 'code',
+                  type: 'text',
+                  required: true,
+                  admin: {
+                    description: 'Currency code (e.g., INR, USD, EUR)',
+                  },
+                },
+                {
+                  name: 'label',
+                  type: 'text',
+                  required: true,
+                  admin: {
+                    description: 'Display label (e.g., INR - Indian Rupee)',
+                  },
+                },
+              ],
+              admin: {
+                description: 'Available currencies for fees',
+              },
+            },
+            {
               name: 'availablePaymentMethods',
               type: 'array',
               required: true,

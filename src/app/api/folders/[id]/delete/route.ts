@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
+import { hasFullAccess, checkDashboardAccess } from '@/utilities/dashboardAccess'
 
 /**
  * DELETE /api/folders/[id]/delete
@@ -56,15 +57,25 @@ export async function DELETE(
       )
     }
 
-    // Verify user owns the folder (unless admin)
-    if (user.role !== 'admin') {
-      const folderOwnerId = typeof folder.user === 'object' ? folder.user.id : folder.user
-      if (folderOwnerId !== user.id) {
-        return NextResponse.json(
-          { error: 'Unauthorized - you do not own this folder' },
-          { status: 403 }
-        )
-      }
+    // Verify user owns the folder or has dashboard access with edit permissions
+    const folderOwnerId = typeof folder.user === 'object' ? folder.user.id : folder.user
+    const isOwner = folderOwnerId === user.id
+    const hasDashboardAccess = checkDashboardAccess(user)
+    const canEdit = hasFullAccess(user) // Only admin/manager can edit, trainer is read-only
+    
+    if (!isOwner && !hasDashboardAccess) {
+      return NextResponse.json(
+        { error: 'Unauthorized - you do not own this folder' },
+        { status: 403 }
+      )
+    }
+    
+    // Trainer can view but not delete
+    if (!isOwner && !canEdit) {
+      return NextResponse.json(
+        { error: 'Unauthorized - read-only access' },
+        { status: 403 }
+      )
     }
 
     // Check if folder has files or subfolders

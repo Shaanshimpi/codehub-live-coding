@@ -9,8 +9,8 @@ export const Users: CollectionConfig = {
     admin: adminOnly,
     // Allow public signup - role enforcement happens in hooks
     create: ({ req }) => {
-      // Admins can always create
-      if (req.user?.role === 'admin') return true
+      // Admins and managers can always create
+      if (req.user?.role === 'admin' || req.user?.role === 'manager') return true
       // Allow public signup (unauthenticated users)
       if (!req.user) return true
       // Others cannot create
@@ -20,8 +20,8 @@ export const Users: CollectionConfig = {
     // Allow users to read their own data (for /api/users/me)
     read: ({ req }) => {
       if (!req.user) return false
-      // Admins can read anyone
-      if (req.user.role === 'admin') return true
+      // Admins and managers can read anyone
+      if (req.user.role === 'admin' || req.user.role === 'manager') return true
       // Users can only read their own data
       return {
         id: {
@@ -29,7 +29,11 @@ export const Users: CollectionConfig = {
         },
       }
     },
-    update: adminOnly,
+    update: ({ req }) => {
+      // Admins and managers can update anyone
+      if (req.user?.role === 'admin' || req.user?.role === 'manager') return true
+      return false
+    },
   },
   admin: {
     defaultColumns: ['name', 'email', 'role'],
@@ -48,6 +52,7 @@ export const Users: CollectionConfig = {
       defaultValue: 'student',
       options: [
         { label: 'Admin', value: 'admin' },
+        { label: 'Manager', value: 'manager' },
         { label: 'Trainer', value: 'trainer' },
         { label: 'Student', value: 'student' },
       ],
@@ -174,12 +179,31 @@ export const Users: CollectionConfig = {
   ],
   hooks: {
     beforeChange: [
-      ({ data, operation, req }) => {
+      async ({ data, operation, req }) => {
         // Enforce student role for public signups (non-authenticated requests)
         if (operation === 'create' && !req.user) {
           // Always set to student for public signups, regardless of what was sent
           data.role = 'student'
         }
+        
+        // Auto-set trial dates for new students
+        if (operation === 'create' && data.role === 'student') {
+          const now = new Date()
+          const trialDays = 7 // Default 7 days, can be fetched from Platform Settings if needed
+          
+          // Set trial start date to now if not provided
+          if (!data.trialStartDate) {
+            data.trialStartDate = now.toISOString()
+          }
+          
+          // Set trial end date to 7 days from now if not provided
+          if (!data.trialEndDate) {
+            const trialEndDate = new Date(now)
+            trialEndDate.setDate(trialEndDate.getDate() + trialDays)
+            data.trialEndDate = trialEndDate.toISOString()
+          }
+        }
+        
         return data
       },
     ],

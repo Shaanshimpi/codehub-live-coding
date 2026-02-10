@@ -61,8 +61,8 @@ export async function GET(request: NextRequest) {
       const folderObj = typeof folder === 'object' ? folder : foldersMap.get(folder)
       if (!folderObj) return ''
       
-      const parentPath = folderObj.folder 
-        ? getFolderPath(folderObj.folder, foldersMap)
+      const parentPath = folderObj.parentFolder 
+        ? getFolderPath(folderObj.parentFolder, foldersMap)
         : ''
       return parentPath ? `${parentPath}/${folderObj.name}` : folderObj.name
     }

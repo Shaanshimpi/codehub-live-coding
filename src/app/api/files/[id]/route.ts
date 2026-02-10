@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
+import { hasFullAccess, checkDashboardAccess } from '@/utilities/dashboardAccess'
 
 /**
  * GET /api/files/[id]
@@ -51,15 +52,16 @@ export async function GET(
       )
     }
 
-    // Verify user owns the file (unless admin)
-    if (user.role !== 'admin') {
-      const fileOwnerId = typeof file.user === 'object' ? file.user.id : file.user
-      if (fileOwnerId !== user.id) {
-        return NextResponse.json(
-          { error: 'Unauthorized - you do not own this file' },
-          { status: 403 }
-        )
-      }
+    // Verify user owns the file or has dashboard access
+    const fileOwnerId = typeof file.user === 'object' ? file.user.id : file.user
+    const isOwner = fileOwnerId === user.id
+    const hasDashboardAccess = checkDashboardAccess(user)
+    
+    if (!isOwner && !hasDashboardAccess) {
+      return NextResponse.json(
+        { error: 'Unauthorized - you do not own this file' },
+        { status: 403 }
+      )
     }
 
     // Determine language from file extension
@@ -164,15 +166,25 @@ export async function PATCH(
       )
     }
 
-    // Verify user owns the file (unless admin)
-    if (user.role !== 'admin') {
-      const fileOwnerId = typeof file.user === 'object' ? file.user.id : file.user
-      if (fileOwnerId !== user.id) {
-        return NextResponse.json(
-          { error: 'Unauthorized - you do not own this file' },
-          { status: 403 }
-        )
-      }
+    // Verify user owns the file or has dashboard access
+    const fileOwnerId = typeof file.user === 'object' ? file.user.id : file.user
+    const isOwner = fileOwnerId === user.id
+    const hasDashboardAccess = checkDashboardAccess(user)
+    const canEdit = hasFullAccess(user) // Only admin/manager can edit, trainer is read-only
+    
+    if (!isOwner && !hasDashboardAccess) {
+      return NextResponse.json(
+        { error: 'Unauthorized - you do not own this file' },
+        { status: 403 }
+      )
+    }
+    
+    // Trainer can view but not edit
+    if (!isOwner && !canEdit) {
+      return NextResponse.json(
+        { error: 'Unauthorized - read-only access' },
+        { status: 403 }
+      )
     }
 
     // Update file

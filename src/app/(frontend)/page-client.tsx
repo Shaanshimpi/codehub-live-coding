@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import { FolderOpen, PlayCircle, Radio, Monitor } from 'lucide-react'
+import { FolderOpen, PlayCircle, Radio, Monitor, LayoutDashboard } from 'lucide-react'
 
 interface User {
   id: string
   email: string
-  role?: 'admin' | 'trainer' | 'student'
+  role?: 'admin' | 'trainer' | 'student' | 'manager'
 }
 
 export function HomePageClient() {
@@ -131,13 +131,16 @@ export function HomePageClient() {
   }, []) // Only run once on mount
 
   const isTrainerOrAdmin = user?.role === 'trainer' || user?.role === 'admin'
+  // Check if user is staff (non-student): admin, manager, or trainer
+  const isStaff = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'trainer'
 
   // Debug logging for user state changes
   useEffect(() => {
     console.log('[HomePageClient] User state changed:', user)
     console.log('[HomePageClient] Loading state:', loading)
     console.log('[HomePageClient] Is trainer/admin:', isTrainerOrAdmin)
-  }, [user, loading, isTrainerOrAdmin])
+    console.log('[HomePageClient] Is staff:', isStaff)
+  }, [user, loading, isTrainerOrAdmin, isStaff])
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
@@ -184,6 +187,17 @@ export function HomePageClient() {
         >
           <Monitor className="h-5 w-5" />
           Monitor Session
+        </Link>
+      )}
+
+      {/* Dashboard Button - Only for staff (admin, manager, trainer) */}
+      {isStaff && (
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 px-6 py-3 bg-accent text-accent-foreground rounded-lg font-medium hover:bg-accent/90 transition-colors shadow-lg border"
+        >
+          <LayoutDashboard className="h-5 w-5" />
+          Dashboard
         </Link>
       )}
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, Radio, Folder, Terminal } from 'lucide-react'
+import { Sparkles, Radio, Folder, Terminal, Download, Upload } from 'lucide-react'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
@@ -15,6 +15,7 @@ import { PaymentDueModal } from '@/components/Payment/PaymentDueModal'
 import { PaymentGracePeriodModal } from '@/components/Payment/PaymentGracePeriodModal'
 import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
 import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
+import { UploadModal } from './UploadModal'
 
 type WorkspaceFile = {
   id: string
@@ -22,7 +23,12 @@ type WorkspaceFile = {
   content: string
 }
 
-export function WorkspaceLayout() {
+interface WorkspaceLayoutProps {
+  userId?: string | number
+  readOnly?: boolean
+}
+
+export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutProps = {}) {
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
@@ -37,6 +43,11 @@ export function WorkspaceLayout() {
   const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
   const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
   const [showTrialGraceModal, setShowTrialGraceModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadMessage, setUploadMessage] = useState('')
+  const [viewingUserName, setViewingUserName] = useState<string | null>(null)
 
   // Update code (and infer language from extension) when file changes
   useEffect(() => {
@@ -83,6 +94,96 @@ export function WorkspaceLayout() {
   const handleFileSaved = () => {
     // Refresh file explorer to show updated file
     setRefreshKey((prev) => prev + 1)
+  }
+
+  const handleDownload = async () => {
+    try {
+      setDownloading(true)
+      const res = await fetch('/api/workspace/download', {
+        credentials: 'include',
+      })
+      
+      if (!res.ok) {
+        throw new Error('Failed to download workspace')
+      }
+      
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `workspace-${Date.now()}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      alert('Failed to download workspace')
+      console.error(error)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.name.endsWith('.zip')) {
+      alert('Please upload a ZIP file')
+      return
+    }
+
+    try {
+      setUploading(true)
+      setUploadProgress(0)
+      setUploadMessage('Preparing upload...')
+      
+      const formData = new FormData()
+      formData.append('file', file)
+
+      setUploadProgress(20)
+      setUploadMessage('Uploading ZIP file...')
+
+      const res = await fetch('/api/workspace/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      })
+
+      setUploadProgress(60)
+      setUploadMessage('Processing files...')
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || 'Failed to upload workspace')
+      }
+
+      setUploadProgress(80)
+      setUploadMessage('Finalizing...')
+
+      const data = await res.json()
+      
+      setUploadProgress(100)
+      setUploadMessage(`Success! ${data.filesCreated} files processed, ${data.foldersCreated} folders created.`)
+      
+      // Wait a moment to show success message
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Refresh workspace
+      setRefreshKey((prev) => prev + 1)
+      // Reload files
+      window.location.reload()
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : 'Failed to upload workspace')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      alert(error instanceof Error ? error.message : 'Failed to upload workspace')
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+      setUploadMessage('')
+      // Reset input
+      event.target.value = ''
+    }
   }
 
   // Check payment status on mount
@@ -133,24 +234,32 @@ export function WorkspaceLayout() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b bg-card px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-lg font-semibold">
-            CodeHub
-          </Link>
-          <span className="text-sm text-muted-foreground">Workspace</span>
-        </div>
-        <div className="flex items-center gap-2">
+    <div className={`flex h-full w-full flex-col overflow-hidden ${uploading ? 'pointer-events-none' : ''}`}>
+      {/* Upload Modal */}
+      <UploadModal 
+        isOpen={uploading} 
+        progress={uploadProgress}
+        message={uploadMessage}
+      />
+      {/* Header - Only show if not in dashboard workspace view (userId prop means we're in dashboard) */}
+      {!userId && (
+        <header className="flex items-center justify-between border-b bg-card px-4 py-2">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-lg font-semibold">
+              CodeHub
+            </Link>
+            <span className="text-sm text-muted-foreground">Workspace</span>
+          </div>
+          <div className="flex items-center gap-2">
           {/* File Explorer Toggle */}
           <button
             onClick={() => setShowFileExplorer(!showFileExplorer)}
+            disabled={uploading}
             className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
               showFileExplorer
                 ? 'bg-card hover:bg-accent'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
           >
             <Folder className="h-4 w-4" />
@@ -158,11 +267,12 @@ export function WorkspaceLayout() {
           {/* Output Toggle */}
           <button
             onClick={() => setShowOutput(!showOutput)}
+            disabled={uploading}
             className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
               showOutput
                 ? 'bg-card hover:bg-accent'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
             title={showOutput ? 'Hide Output' : 'Show Output'}
           >
             <Terminal className="h-4 w-4" />
@@ -171,16 +281,39 @@ export function WorkspaceLayout() {
           {selectedFile && (
             <button
               onClick={() => setShowAI(!showAI)}
+              disabled={uploading}
               className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
                 showAI
                   ? 'bg-card hover:bg-accent'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={showAI ? 'Hide AI Help' : 'Show AI Help'}
             >
               <Sparkles className="h-4 w-4" />
             </button>
           )}
+          {/* Download Workspace */}
+          <button
+            onClick={handleDownload}
+            disabled={downloading || uploading}
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Download workspace as ZIP"
+          >
+            <Download className="h-4 w-4" />
+            {downloading ? 'Downloading...' : 'Download'}
+          </button>
+          {/* Upload Workspace */}
+          <label className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-accent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${uploading ? 'pointer-events-none' : ''}`}>
+            <Upload className="h-4 w-4" />
+            {uploading ? 'Uploading...' : 'Upload'}
+            <input
+              type="file"
+              accept=".zip"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
           <Link
             href="/join"
             className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -188,8 +321,78 @@ export function WorkspaceLayout() {
             <Radio className="h-4 w-4" />
             Join Live Session
           </Link>
+          </div>
+        </header>
+      )}
+      
+      {/* Dashboard Workspace View - Show controls bar when userId is provided */}
+      {userId && (
+        <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
+          {/* File Explorer Toggle */}
+          <button
+            onClick={() => setShowFileExplorer(!showFileExplorer)}
+            disabled={uploading}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              showFileExplorer
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+          >
+            <Folder className="h-4 w-4" />
+          </button>
+          {/* Output Toggle */}
+          <button
+            onClick={() => setShowOutput(!showOutput)}
+            disabled={uploading}
+            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+              showOutput
+                ? 'bg-card hover:bg-accent'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={showOutput ? 'Hide Output' : 'Show Output'}
+          >
+            <Terminal className="h-4 w-4" />
+          </button>
+          {/* AI Help Toggle */}
+          {selectedFile && (
+            <button
+              onClick={() => setShowAI(!showAI)}
+              disabled={uploading}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                showAI
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={showAI ? 'Hide AI Help' : 'Show AI Help'}
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          )}
+          {/* Download Workspace */}
+          <button
+            onClick={handleDownload}
+            disabled={downloading || uploading}
+            className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Download workspace as ZIP"
+          >
+            <Download className="h-4 w-4" />
+            {downloading ? 'Downloading...' : 'Download'}
+          </button>
+          {/* Upload Workspace */}
+          <label className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-accent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${uploading ? 'pointer-events-none' : ''}`}>
+            <Upload className="h-4 w-4" />
+            {uploading ? 'Uploading...' : 'Upload'}
+            <input
+              type="file"
+              accept=".zip"
+              onChange={handleUpload}
+              disabled={uploading}
+              className="hidden"
+            />
+          </label>
         </div>
-      </header>
+      )}
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
@@ -201,6 +404,8 @@ export function WorkspaceLayout() {
               onFileSelect={handleFileSelect}
               selectedFileId={selectedFile?.id}
               onFileSaved={handleFileSaved}
+              userId={userId}
+              readOnly={readOnly}
             />
           </div>
         )}
@@ -226,6 +431,8 @@ export function WorkspaceLayout() {
               onRun={handleRun}
               executing={executing}
               onSave={handleFileSaved}
+              readOnly={readOnly}
+              allowRunInReadOnly={readOnly}
             />
           ) : (
             <div className="flex h-full items-center justify-center">
