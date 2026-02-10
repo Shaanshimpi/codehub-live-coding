@@ -130,7 +130,7 @@ export function HomePageClient() {
     }
   }, []) // Only run once on mount
 
-  const isTrainerOrAdmin = user?.role === 'trainer' || user?.role === 'admin'
+  const isTrainerOrAdmin = user?.role === 'trainer' || user?.role === 'admin' || user?.role === 'manager'
   // Check if user is staff (non-student): admin, manager, or trainer
   const isStaff = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'trainer'
 
@@ -142,18 +142,21 @@ export function HomePageClient() {
     console.log('[HomePageClient] Is staff:', isStaff)
   }, [user, loading, isTrainerOrAdmin, isStaff])
 
+  const buttonBase =
+    'inline-flex h-12 items-center justify-center gap-2 rounded-lg px-6 text-sm font-medium shadow-lg whitespace-nowrap transition-colors'
+
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-6">
       {/* Workspace Button - Available for all logged-in users */}
       {loading ? (
-        <div className="flex items-center gap-2 px-6 py-3 bg-muted rounded-lg font-medium">
+        <div className={`${buttonBase} bg-muted text-foreground`}>
           <FolderOpen className="h-5 w-5" />
           Loading...
         </div>
       ) : user ? (
         <Link
           href="/workspace"
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-lg"
+          className={`${buttonBase} bg-primary text-primary-foreground hover:bg-primary/90`}
         >
           <FolderOpen className="h-5 w-5" />
           Workspace
@@ -161,29 +164,29 @@ export function HomePageClient() {
       ) : (
         <Link
           href="/admin/login?redirect=/"
-          className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-lg"
+          className={`${buttonBase} bg-primary text-primary-foreground hover:bg-primary/90`}
         >
           <FolderOpen className="h-5 w-5" />
           Login to Access Workspace
         </Link>
       )}
 
-      {/* Start Session Button - Only for trainers and admins */}
+      {/* Start Session Button - Only for trainers, managers, and admins */}
       {isTrainerOrAdmin && (
         <Link
           href="/trainer/start"
-          className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-medium hover:bg-secondary/90 transition-colors shadow-lg border"
+          className={`${buttonBase} bg-secondary text-secondary-foreground border hover:bg-secondary/90`}
         >
           <PlayCircle className="h-5 w-5" />
           Start Session
         </Link>
       )}
 
-      {/* Monitor Session Button - Only for trainers and admins */}
+      {/* Monitor Session Button - Only for trainers, managers, and admins */}
       {isTrainerOrAdmin && (
         <Link
           href="/staff/monitor"
-          className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-medium hover:bg-secondary/90 transition-colors shadow-lg border"
+          className={`${buttonBase} bg-secondary text-secondary-foreground border hover:bg-secondary/90`}
         >
           <Monitor className="h-5 w-5" />
           Monitor Session
@@ -194,7 +197,7 @@ export function HomePageClient() {
       {isStaff && (
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 px-6 py-3 bg-accent text-accent-foreground rounded-lg font-medium hover:bg-accent/90 transition-colors shadow-lg border"
+          className={`${buttonBase} bg-accent text-accent-foreground border hover:bg-accent/90`}
         >
           <LayoutDashboard className="h-5 w-5" />
           Dashboard
@@ -204,7 +207,7 @@ export function HomePageClient() {
       {/* Join Session Button - Available to everyone */}
       <Link
         href="/join"
-        className="flex items-center gap-2 px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-medium hover:bg-secondary/90 transition-colors shadow-lg border"
+        className={`${buttonBase} bg-secondary text-secondary-foreground border hover:bg-secondary/90`}
       >
         <Radio className="h-5 w-5" />
         Join Session

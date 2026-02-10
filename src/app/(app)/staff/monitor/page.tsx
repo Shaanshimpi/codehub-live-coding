@@ -9,8 +9,8 @@ export default async function MonitorSelectionPage() {
   try {
     const { user } = await getMeUser({ nullUserRedirect: undefined })
     
-    // Check if user is staff (admin or trainer)
-    if (!user || (user.role !== 'admin' && user.role !== 'trainer')) {
+    // Check if user is staff (admin, manager, or trainer)
+    if (!user || (user.role !== 'admin' && user.role !== 'manager' && user.role !== 'trainer')) {
       redirect('/')
     }
 
