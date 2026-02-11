@@ -16,11 +16,17 @@ interface CreateFileModalProps {
   folders: Folder[]
   onClose: () => void
   onSuccess: () => void
+  /**
+   * Optional current folder ID. When provided, the new file will be created
+   * inside this folder and the folder selector will be hidden.
+   */
+  currentFolderId?: string | number | null
 }
 
-export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModalProps) {
+export function CreateFileModal({ folders, onClose, onSuccess, currentFolderId }: CreateFileModalProps) {
   const [name, setName] = useState('')
-  const [selectedFolder, setSelectedFolder] = useState<string>('')
+  // Auto-set selectedFolder if currentFolderId is provided
+  const [selectedFolder, setSelectedFolder] = useState<string>(currentFolderId ? String(currentFolderId) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -131,22 +137,29 @@ export function CreateFileModal({ folders, onClose, onSuccess }: CreateFileModal
             />
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Folder (Optional)</label>
-            <select
-              value={selectedFolder}
-              onChange={(e) => setSelectedFolder(e.target.value)}
-              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              disabled={loading}
-            >
-              <option value="">Root (No folder)</option>
-              {folderOptions.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!currentFolderId && (
+            <div>
+              <label className="text-sm font-medium">Folder (Optional)</label>
+              <select
+                value={selectedFolder}
+                onChange={(e) => setSelectedFolder(e.target.value)}
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={loading}
+              >
+                <option value="">Root (No folder)</option>
+                {folderOptions.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {currentFolderId && (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              File will be created in the current folder
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">

@@ -16,11 +16,17 @@ interface CreateFolderModalProps {
   folders: FolderOption[]
   onClose: () => void
   onSuccess: () => void
+  /**
+   * Optional current folder ID. When provided, the new folder will be created
+   * inside this folder and the parent folder selector will be hidden.
+   */
+  currentFolderId?: string | number | null
 }
 
-export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderModalProps) {
+export function CreateFolderModal({ folders, onClose, onSuccess, currentFolderId }: CreateFolderModalProps) {
   const [name, setName] = useState('')
-  const [parentId, setParentId] = useState<string>('')
+  // Auto-set parentId if currentFolderId is provided
+  const [parentId, setParentId] = useState<string>(currentFolderId ? String(currentFolderId) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -134,22 +140,29 @@ export function CreateFolderModal({ folders, onClose, onSuccess }: CreateFolderM
             />
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Parent Folder (optional)</label>
-            <select
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-              disabled={loading}
-            >
-              <option value="">Root (no parent)</option>
-              {folderOptions.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!currentFolderId && (
+            <div>
+              <label className="text-sm font-medium">Parent Folder (optional)</label>
+              <select
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={loading}
+              >
+                <option value="">Root (no parent)</option>
+                {folderOptions.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {`${'\u00A0'.repeat(folder.depth * 2)}${folder.label}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {currentFolderId && (
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              Folder will be created in the current folder
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md bg-destructive/10 p-2 text-sm text-destructive">

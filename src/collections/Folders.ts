@@ -1,10 +1,21 @@
 import type { CollectionConfig } from 'payload'
 
+// Helper function to generate URL-friendly slug from name
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters
+    .replace(/[\s_-]+/g, '-') // Replace spaces and underscores with hyphens
+    .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+    .substring(0, 100) // Limit length
+}
+
 export const Folders: CollectionConfig = {
   slug: 'folders',
   admin: {
     useAsTitle: 'name',
-    defaultColumns: ['name', 'user', 'parentFolder', 'createdAt'],
+    defaultColumns: ['name', 'slug', 'user', 'parentFolder', 'createdAt'],
     group: 'Workspace',
   },
   fields: [
@@ -12,6 +23,109 @@ export const Folders: CollectionConfig = {
       name: 'name',
       type: 'text',
       required: true,
+      hooks: {
+        afterChange: [
+          async ({ data, req, value }) => {
+            // Auto-generate slug when name changes if slug is missing
+            if (value && data?.id && (!data.slug || data.slug === '')) {
+              const slug = generateSlug(value)
+              try {
+                await req.payload.update({
+                  collection: 'folders',
+                  id: data.id,
+                  data: { slug },
+                  overrideAccess: true,
+                })
+              } catch (error) {
+                console.error('Failed to auto-generate slug for folder:', error)
+              }
+            }
+          },
+        ],
+      },
+    },
+    {
+      name: 'slug',
+      type: 'text',
+      required: true,
+      unique: false, // Not globally unique, but unique per user
+      admin: {
+        description: 'URL-friendly identifier for this folder. Auto-generated from name.',
+      },
+      hooks: {
+        beforeValidate: [
+          async ({ data, operation, value, req }) => {
+            // Auto-generate slug from name if not provided or empty
+            const name = data?.name
+            if (!name && !value) return ''
+            
+            // If slug is already provided and valid, use it
+            if (value && /^[a-z0-9-]+$/.test(value)) {
+              return value
+            }
+
+            // Generate slug from name
+            if (!name) return value || ''
+            let slug = generateSlug(name)
+
+            // Ensure uniqueness per user
+            if (req.user) {
+              let counter = 1
+              const baseSlug = slug
+              while (true) {
+                const existing = await req.payload.find({
+                  collection: 'folders',
+                  where: {
+                    and: [
+                      { slug: { equals: slug } },
+                      { user: { equals: req.user.id } },
+                      ...(operation === 'update' && data?.id
+                        ? [{ id: { not_equals: data.id } }]
+                        : []),
+                    ],
+                  },
+                  limit: 1,
+                })
+
+                if (existing.docs.length === 0) break
+                slug = `${baseSlug}-${counter}`
+                counter++
+              }
+            }
+
+            return slug
+          },
+        ],
+      },
+      validate: async (value, { data, req, operation }) => {
+        if (!value) return 'Slug is required'
+        if (!/^[a-z0-9-]+$/.test(value)) {
+          return 'Slug can only contain lowercase letters, numbers, and hyphens'
+        }
+
+        // Check uniqueness per user
+        if (req.user) {
+          const existing = await req.payload.find({
+            collection: 'folders',
+            where: {
+              and: [
+                { slug: { equals: value } },
+                { user: { equals: req.user.id } },
+                ...(operation === 'update' && data?.id
+                  ? [{ id: { not_equals: data.id } }]
+                  : []),
+              ],
+            },
+            limit: 1,
+          })
+
+          if (existing.docs.length > 0) {
+            return 'A folder with this slug already exists in your workspace'
+          }
+        }
+
+        return true
+      },
     },
     {
       name: 'user',

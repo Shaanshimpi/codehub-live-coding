@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, Radio, Folder, Terminal, Download, Upload } from 'lucide-react'
+import { Sparkles, Radio, Folder, Terminal, Download, Upload, ArrowLeft } from 'lucide-react'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
@@ -16,6 +16,7 @@ import { PaymentGracePeriodModal } from '@/components/Payment/PaymentGracePeriod
 import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
 import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
 import { UploadModal } from './UploadModal'
+import { buildFolderPathChain, type BasicFolderRef } from '@/utilities/workspaceScope'
 
 type WorkspaceFile = {
   id: string
@@ -26,9 +27,14 @@ type WorkspaceFile = {
 interface WorkspaceLayoutProps {
   userId?: string | number
   readOnly?: boolean
+  /**
+   * Optional folder slug that defines the root of the visible workspace subtree.
+   * When provided, only this folder and its descendants are shown in the tree.
+   */
+  scopeFolderSlug?: string
 }
 
-export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutProps = {}) {
+export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: WorkspaceLayoutProps = {}) {
   const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
@@ -48,6 +54,8 @@ export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutPro
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadMessage, setUploadMessage] = useState('')
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
+  const [scopedFolder, setScopedFolder] = useState<(BasicFolderRef & { slug?: string | null }) | null>(null)
+  const [scopedFolderLoading, setScopedFolderLoading] = useState(false)
 
   // Update code (and infer language from extension) when file changes
   useEffect(() => {
@@ -222,6 +230,40 @@ export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutPro
     checkPaymentStatus()
   }, [])
 
+  // Fetch scoped folder data when scopeFolderSlug is provided
+  useEffect(() => {
+    if (scopeFolderSlug) {
+      const fetchScopedFolder = async () => {
+        try {
+          setScopedFolderLoading(true)
+          const res = await fetch(`/api/folders?limit=1000&depth=2`, { credentials: 'include', cache: 'no-store' })
+          if (res.ok) {
+            const data = await res.json()
+            // Find folder by slug, with fallback to ID for backward compatibility
+            const folder = (data.docs || []).find((f: any) => {
+              if (f.slug === scopeFolderSlug) return true
+              // Fallback: try matching by ID
+              if (String(f.id) === scopeFolderSlug) return true
+              return false
+            })
+            if (folder) {
+              setScopedFolder(folder as BasicFolderRef & { slug?: string | null })
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch scoped folder:', error)
+        } finally {
+          setScopedFolderLoading(false)
+        }
+      }
+      fetchScopedFolder()
+    } else {
+      setScopedFolder(null)
+    }
+  }, [scopeFolderSlug])
+
+  const scopedBreadcrumb = scopedFolder ? buildFolderPathChain(scopedFolder) : []
+
   // Show payment blocked screen if student is blocked
   if (paymentStatus?.isBlocked) {
     return (
@@ -244,11 +286,52 @@ export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutPro
       {/* Header - Only show if not in dashboard workspace view (userId prop means we're in dashboard) */}
       {!userId && (
         <header className="flex items-center justify-between border-b bg-card px-4 py-2">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="text-lg font-semibold">
               CodeHub
             </Link>
-            <span className="text-sm text-muted-foreground">Workspace</span>
+            {scopeFolderSlug && scopedFolder ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <Link
+                  href={`/workspace/explorer/${scopedFolder.slug || scopedFolder.id}`}
+                  className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[10px] font-medium hover:bg-accent transition-colors"
+                >
+                  <ArrowLeft className="h-3 w-3" />
+                  Back to Explorer
+                </Link>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+                  <Link
+                    href="/workspace"
+                    className="hover:text-foreground hover:underline transition-colors truncate"
+                  >
+                    Workspace
+                  </Link>
+                  {scopedBreadcrumb.map((folder, index) => {
+                    const isLast = index === scopedBreadcrumb.length - 1
+                    const folderWithSlug = folder as BasicFolderRef & { slug?: string | null }
+                    return (
+                      <React.Fragment key={folder.id}>
+                        <span>/</span>
+                        {isLast ? (
+                          <span className="truncate font-medium text-foreground">
+                            {folder.name || 'Folder'}
+                          </span>
+                        ) : (
+                          <Link
+                            href={`/workspace/folder/${folderWithSlug.slug || folder.id}`}
+                            className="hover:text-foreground hover:underline transition-colors truncate"
+                          >
+                            {folder.name || 'Untitled'}
+                          </Link>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">Workspace</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
           {/* File Explorer Toggle */}
@@ -406,6 +489,7 @@ export function WorkspaceLayout({ userId, readOnly = false }: WorkspaceLayoutPro
               onFileSaved={handleFileSaved}
               userId={userId}
               readOnly={readOnly}
+              rootFolderSlug={scopeFolderSlug}
             />
           </div>
         )}

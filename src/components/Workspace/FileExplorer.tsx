@@ -32,9 +32,21 @@ interface FileExplorerProps {
   onFileSaved?: () => void
   userId?: string | number
   readOnly?: boolean
+  /**
+   * Optional folder slug that acts as the root of the visible tree.
+   * When provided, only this folder and its descendants are shown.
+   */
+  rootFolderSlug?: string
 }
 
-export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved, userId, readOnly = false }: FileExplorerProps) {
+export function FileExplorer({
+  onFileSelect,
+  selectedFileId,
+  onFileSaved,
+  userId,
+  readOnly = false,
+  rootFolderSlug,
+}: FileExplorerProps) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
@@ -167,19 +179,48 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved, userId
       }
     })
 
+    // If a rootFolderSlug is provided and exists, use that folder as the only root
+    if (rootFolderSlug) {
+      // Try to find the folder by slug, with fallback to ID for backward compatibility
+      const scopedRoot = Array.from(folderMap.values()).find((f) => {
+        if ((f as any).slug === rootFolderSlug) return true
+        // Fallback: try matching by ID
+        if (String(f.id) === rootFolderSlug) return true
+        return false
+      })
+      if (scopedRoot) {
+        return [scopedRoot]
+      }
+      // If folder not found, return empty array (scoped view with invalid folder)
+      return []
+    }
+
     return rootFolders
   }
 
   const folderTree = buildFolderTree(folders)
   // Filter root files - files without a folder (folder is undefined or null)
-  const rootFiles = files.filter((f) => !f.folder)
+  // When rootFolderSlug is provided, we are in a scoped view and do not show global root files.
+  const rootFiles = rootFolderSlug ? [] : files.filter((f) => !f.folder)
+
+  // Get scoped folder name if rootFolderSlug is provided
+  const scopedFolder = rootFolderSlug 
+    ? folders.find((f) => {
+        if ((f as any).slug === rootFolderSlug) return true
+        // Fallback: try matching by ID
+        if (String(f.id) === rootFolderSlug) return true
+        return false
+      })
+    : null
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="border-b bg-card px-3 py-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">My Workspace</h2>
+          <h2 className="text-sm font-semibold">
+            {scopedFolder ? scopedFolder.name || 'Folder' : 'My Workspace'}
+          </h2>
           <button
             onClick={handleRefresh}
             className="text-xs text-muted-foreground hover:text-foreground"
@@ -255,6 +296,7 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved, userId
       {showCreateFolder && (
         <CreateFolderModal
           folders={folders}
+          currentFolderId={scopedFolder?.id}
           onClose={() => setShowCreateFolder(false)}
           onSuccess={() => {
             setShowCreateFolder(false)
@@ -266,6 +308,7 @@ export function FileExplorer({ onFileSelect, selectedFileId, onFileSaved, userId
       {showCreateFile && (
         <CreateFileModal
           folders={folders}
+          currentFolderId={scopedFolder?.id}
           onClose={() => setShowCreateFile(false)}
           onSuccess={() => {
             setShowCreateFile(false)

@@ -952,6 +952,10 @@ export interface Folder {
   id: number;
   name: string;
   /**
+   * URL-friendly identifier for this folder. Auto-generated from name.
+   */
+  slug: string;
+  /**
    * Owner of this folder (student or trainer). Defaults to current user.
    */
   user: number | User;
@@ -1694,6 +1698,7 @@ export interface LiveSessionsSelect<T extends boolean = true> {
  */
 export interface FoldersSelect<T extends boolean = true> {
   name?: T;
+  slug?: T;
   user?: T;
   parentFolder?: T;
   updatedAt?: T;
