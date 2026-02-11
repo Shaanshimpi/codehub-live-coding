@@ -882,7 +882,7 @@ export interface LiveSession {
    */
   title: string;
   /**
-   * Trainer conducting this session (can be trainer or admin)
+   * Trainer/host conducting this session (can be trainer, manager, or admin)
    */
   trainer: number | User;
   /**

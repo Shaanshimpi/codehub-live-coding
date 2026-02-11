@@ -31,11 +31,11 @@ export const LiveSessions: CollectionConfig = {
       relationTo: 'users',
       required: true,
       filterOptions: {
-        // Allow both trainers and admins to be assigned as trainers
-        role: { in: ['trainer', 'admin'] },
+        // Allow trainers, managers, and admins to be assigned as trainers/hosts
+        role: { in: ['trainer', 'manager', 'admin'] },
       },
       admin: {
-        description: 'Trainer conducting this session (can be trainer or admin)',
+        description: 'Trainer/host conducting this session (can be trainer, manager, or admin)',
       },
     },
     {
@@ -129,10 +129,10 @@ export const LiveSessions: CollectionConfig = {
   access: {
     // Anyone can read active sessions (to join)
     read: () => true,
-    // Only trainers can create sessions
+    // Only trainers, managers, or admins can create sessions
     create: ({ req }) => {
       if (!req.user) return false
-      return req.user.role === 'trainer' || req.user.role === 'admin'
+      return req.user.role === 'trainer' || req.user.role === 'manager' || req.user.role === 'admin'
     },
     // Only the trainer who created the session can update it
     update: ({ req }) => {

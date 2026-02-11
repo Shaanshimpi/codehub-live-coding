@@ -1,7 +1,7 @@
-'use client'
+"use client"
 
-import React from 'react'
-import { X, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { X, CheckCircle2, AlertCircle, Clock, ZoomIn, ZoomOut } from 'lucide-react'
 import type { ExecutionResult } from '@/services/codeExecution'
 
 interface OutputPanelProps {
@@ -11,6 +11,45 @@ interface OutputPanelProps {
 }
 
 export function OutputPanel({ result, executing, onClear }: OutputPanelProps) {
+  const [fontSize, setFontSize] = useState<number>(12)
+
+  // Load persisted output font size
+  useEffect(() => {
+    try {
+      const stored =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('codehub:outputFontSize')
+          : null
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (!Number.isNaN(parsed) && parsed >= 10 && parsed <= 24) {
+          setFontSize(parsed)
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [])
+
+  // Persist output font size
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('codehub:outputFontSize', String(fontSize))
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [fontSize])
+
+  const handleZoomIn = () => {
+    setFontSize((prev) => Math.min(24, prev + 1))
+  }
+
+  const handleZoomOut = () => {
+    setFontSize((prev) => Math.max(10, prev - 1))
+  }
+
   if (executing) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm text-muted-foreground">
@@ -51,6 +90,29 @@ export function OutputPanel({ result, executing, onClear }: OutputPanelProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 border-r pr-2 mr-1">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] hover:bg-accent transition-colors"
+              title="Zoom out output"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </button>
+            <span className="text-[10px] text-muted-foreground w-10 text-center">
+              {fontSize}px
+            </span>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] hover:bg-accent transition-colors"
+              title="Zoom in output"
+            >
+              <ZoomIn className="h-3 w-3" />
+            </button>
+          </div>
+
           {result.executionTime !== undefined && (
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Clock className="h-3 w-3" />
@@ -73,7 +135,10 @@ export function OutputPanel({ result, executing, onClear }: OutputPanelProps) {
       {/* Output Content */}
       <div className="flex-1 overflow-y-auto">
         {hasOutput ? (
-          <div className="p-3 font-mono text-xs">
+          <div
+            className="p-3 font-mono"
+            style={{ fontSize: `${fontSize}px`, lineHeight: 1.4 }}
+          >
             {/* Standard Output */}
             {result.stdout && (
               <div className="whitespace-pre-wrap text-foreground">{result.stdout}</div>

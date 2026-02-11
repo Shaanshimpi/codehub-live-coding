@@ -35,7 +35,7 @@ export async function POST(
       return createAuthErrorResponse('Session expired', 401)
     }
     
-    if (!user || (user.role !== 'student' && user.role !== 'trainer' && user.role !== 'admin')) {
+    if (!user || (user.role !== 'student' && user.role !== 'trainer' && user.role !== 'manager' && user.role !== 'admin')) {
       return createAuthErrorResponse('Unauthorized', 401)
     }
 

@@ -14,3 +14,4 @@ WHERE email = 'YOUR_EMAIL_HERE';
 SELECT id, name, email, role FROM users WHERE role = 'admin';
 
 
+

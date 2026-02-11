@@ -1,8 +1,8 @@
-'use client'
+"use client"
 
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor, { useMonaco } from '@monaco-editor/react'
-import { Play, Square, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
+import { Play, Square, ChevronDown, ChevronUp, Sparkles, ZoomIn, ZoomOut } from 'lucide-react'
 import { LiveCodePlaygroundProps, SUPPORTED_LANGUAGES } from './types'
 import { useTheme } from '@/providers/Theme'
 
@@ -25,6 +25,7 @@ export function LiveCodePlayground({
   const editorRef = useRef<any>(null)
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
+  const [fontSize, setFontSize] = useState<number>(14)
   const monaco = useMonaco()
   const { theme: appTheme } = useTheme()
   
@@ -94,6 +95,40 @@ export function LiveCodePlayground({
     }
   }, [onAIRequest])
 
+  // Load persisted font size (shared across all editors)
+  useEffect(() => {
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('codehub:editorFontSize') : null
+      if (stored) {
+        const parsed = parseInt(stored, 10)
+        if (!Number.isNaN(parsed) && parsed >= 10 && parsed <= 32) {
+          setFontSize(parsed)
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [])
+
+  // Persist font size when it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('codehub:editorFontSize', String(fontSize))
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [fontSize])
+
+  const handleZoomIn = useCallback(() => {
+    setFontSize((prev) => Math.min(32, prev + 1))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setFontSize((prev) => Math.max(10, prev - 1))
+  }, [])
+
   // Update Monaco theme when app theme changes
   useEffect(() => {
     if (monaco && editorRef.current && !themeProp) {
@@ -124,6 +159,29 @@ export function LiveCodePlayground({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 border-r pr-2 mr-1">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] hover:bg-accent transition-colors"
+              title="Zoom out"
+            >
+              <ZoomOut className="h-3 w-3" />
+            </button>
+            <span className="text-[10px] text-muted-foreground w-10 text-center">
+              {fontSize}px
+            </span>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="inline-flex items-center justify-center rounded-md border px-1.5 py-0.5 text-[10px] hover:bg-accent transition-colors"
+              title="Zoom in"
+            >
+              <ZoomIn className="h-3 w-3" />
+            </button>
+          </div>
+
           {/* Input Toggle */}
           <button
             type="button"
@@ -211,7 +269,7 @@ export function LiveCodePlayground({
           options={{
             readOnly,
             minimap: { enabled: true },
-            fontSize: 14,
+            fontSize,
             lineNumbers: 'on',
             scrollBeyondLastLine: false,
             automaticLayout: true,

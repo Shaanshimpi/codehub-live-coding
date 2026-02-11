@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
       return createAuthErrorResponse('Unauthorized', 401)
     }
 
-    // Verify user is trainer or admin
-    if (user.role !== 'trainer' && user.role !== 'admin') {
-      return createAuthErrorResponse('Only trainers can create sessions', 403)
+    // Verify user is trainer, manager, or admin
+    if (user.role !== 'trainer' && user.role !== 'manager' && user.role !== 'admin') {
+      return createAuthErrorResponse('Only trainers or managers can create sessions', 403)
     }
 
     const body = await request.json()

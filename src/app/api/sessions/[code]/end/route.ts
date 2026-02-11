@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
+import { getMeUser } from '@/auth/getMeUser'
+import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 
 /**
  * POST /api/sessions/[code]/end
@@ -21,6 +23,19 @@ export async function POST(
         { error: 'Invalid join code format' },
         { status: 400 }
       )
+    }
+
+    // Authenticate user and verify staff role (trainer, manager, or admin)
+    let user
+    try {
+      const result = await getMeUser({ nullUserRedirect: undefined })
+      user = result.user
+    } catch (error) {
+      return createAuthErrorResponse('Session expired', 401)
+    }
+
+    if (!user || (user.role !== 'trainer' && user.role !== 'manager' && user.role !== 'admin')) {
+      return createAuthErrorResponse('Unauthorized - trainer or manager access required', 401)
     }
 
     const payload = await getPayload({ config })
@@ -67,6 +82,7 @@ export async function POST(
     )
   }
 }
+
 
 
 

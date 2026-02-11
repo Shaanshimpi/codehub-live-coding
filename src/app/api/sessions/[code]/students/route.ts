@@ -25,7 +25,7 @@ export async function GET(
       )
     }
 
-    // Get authenticated user (must be trainer or admin)
+    // Get authenticated user (must be trainer, manager, or admin)
     let user
     try {
       const result = await getMeUser({ nullUserRedirect: undefined })
@@ -35,8 +35,8 @@ export async function GET(
       return createAuthErrorResponse('Session expired', 401)
     }
     
-    if (!user || (user.role !== 'trainer' && user.role !== 'admin')) {
-      return createAuthErrorResponse('Unauthorized - trainer access required', 401)
+    if (!user || (user.role !== 'trainer' && user.role !== 'manager' && user.role !== 'admin')) {
+      return createAuthErrorResponse('Unauthorized - trainer or manager access required', 401)
     }
 
     const payload = await getPayload({ config })
