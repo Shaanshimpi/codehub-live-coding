@@ -145,6 +145,92 @@ export function FileExplorer({
     }
   }
 
+  const handleFileRename = async (fileId: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/files/${fileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: newName }),
+      })
+      if (res.ok) {
+        fetchData()
+        if (onFileSaved) {
+          onFileSaved()
+        }
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to rename file')
+      }
+    } catch (error) {
+      console.error('Failed to rename file:', error)
+      alert('Failed to rename file')
+    }
+  }
+
+  const handleFolderRename = async (folderId: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: newName }),
+      })
+      if (res.ok) {
+        fetchData()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to rename folder')
+      }
+    } catch (error) {
+      console.error('Failed to rename folder:', error)
+      alert('Failed to rename folder')
+    }
+  }
+
+  const handleFileMove = async (fileId: string, newFolderId: string | number | null) => {
+    try {
+      const res = await fetch(`/api/files/${fileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ folder: newFolderId }),
+      })
+      if (res.ok) {
+        fetchData()
+        if (onFileSaved) {
+          onFileSaved()
+        }
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to move file')
+      }
+    } catch (error) {
+      console.error('Failed to move file:', error)
+      alert('Failed to move file')
+    }
+  }
+
+  const handleFolderMove = async (folderId: string, newParentId: string | number | null) => {
+    try {
+      const res = await fetch(`/api/folders/${folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ parentFolder: newParentId }),
+      })
+      if (res.ok) {
+        fetchData()
+      } else {
+        const error = await res.json().catch(() => ({}))
+        alert(error.error || 'Failed to move folder')
+      }
+    } catch (error) {
+      console.error('Failed to move folder:', error)
+      alert('Failed to move folder')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -272,6 +358,12 @@ export function FileExplorer({
                 onFileClick={handleFileClick}
                 onFileDelete={readOnly ? undefined : handleFileDelete}
                 onFolderDelete={readOnly ? undefined : handleFolderDelete}
+                onFileRename={readOnly ? undefined : handleFileRename}
+                onFolderRename={readOnly ? undefined : handleFolderRename}
+                onFileMove={readOnly ? undefined : handleFileMove}
+                onFolderMove={readOnly ? undefined : handleFolderMove}
+                allFolders={folders}
+                readOnly={readOnly}
                 level={0}
               />
             ))}
@@ -285,6 +377,12 @@ export function FileExplorer({
                 onFileClick={handleFileClick}
                 onFileDelete={readOnly ? undefined : handleFileDelete}
                 onFolderDelete={readOnly ? undefined : handleFolderDelete}
+                onFileRename={readOnly ? undefined : handleFileRename}
+                onFolderRename={readOnly ? undefined : handleFolderRename}
+                onFileMove={readOnly ? undefined : handleFileMove}
+                onFolderMove={readOnly ? undefined : handleFolderMove}
+                allFolders={folders}
+                readOnly={readOnly}
                 level={0}
               />
             ))}

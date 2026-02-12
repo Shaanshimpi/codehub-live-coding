@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { GraduationCap, Users, Clock } from 'lucide-react'
+import Link from 'next/link'
+import { GraduationCap, Users, Clock, FolderOpen, LayoutTemplate } from 'lucide-react'
 import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { useTheme } from '@/providers/Theme'
@@ -124,6 +125,19 @@ export function CodeViewer({ user }: CodeViewerProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Open Workspace buttons - only show for students */}
+            {!user.isTrainer && (
+              <>
+                <Link
+                  href={`/dashboard/workspaces/${user.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                  title="Open student's workspace in Explorer/Workspace mode"
+                >
+                  <FolderOpen className="h-3 w-3" />
+                  Open Workspace
+                </Link>
+              </>
+            )}
             <span className="text-xs text-muted-foreground">Language:</span>
             <select
               value={language}

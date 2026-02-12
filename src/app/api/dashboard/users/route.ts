@@ -77,17 +77,62 @@ export async function GET(request: NextRequest) {
       overrideAccess: true,
     })
 
+    // Fetch fees for students to calculate next payment due date
+    const studentIds = users.docs.filter(u => u.role === 'student').map(u => u.id)
+    const feesMap = new Map<number, { nextDueDate: string | null }>()
+    
+    if (studentIds.length > 0) {
+      const fees = await payload.find({
+        collection: 'fees',
+        where: {
+          and: [
+            { student: { in: studentIds } },
+            { isActive: { equals: true } },
+          ],
+        },
+        overrideAccess: true,
+      })
+
+      // Calculate next payment due date for each student
+      fees.docs.forEach((fee) => {
+        const studentId = typeof fee.student === 'object' ? fee.student.id : fee.student
+        
+        if (fee.installments && Array.isArray(fee.installments)) {
+          // Find next unpaid installment
+          const sortedInstallments = [...fee.installments].sort(
+            (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+          )
+          
+          const nextUnpaid = sortedInstallments.find((inst) => !inst.isPaid)
+          if (nextUnpaid) {
+            feesMap.set(studentId, { nextDueDate: nextUnpaid.dueDate })
+          } else {
+            // All paid
+            feesMap.set(studentId, { nextDueDate: null })
+          }
+        } else {
+          feesMap.set(studentId, { nextDueDate: null })
+        }
+      })
+    }
+
     // Format response (exclude sensitive fields)
-    const formattedUsers = users.docs.map((userDoc) => ({
-      id: userDoc.id,
-      name: userDoc.name,
-      email: userDoc.email,
-      role: userDoc.role,
-      phone: userDoc.phone,
-      college: userDoc.college,
-      createdAt: userDoc.createdAt,
-      updatedAt: userDoc.updatedAt,
-    }))
+    const formattedUsers = users.docs.map((userDoc) => {
+      const feeInfo = feesMap.get(userDoc.id)
+      return {
+        id: userDoc.id,
+        name: userDoc.name,
+        email: userDoc.email,
+        role: userDoc.role,
+        phone: userDoc.phone,
+        college: userDoc.college,
+        isAdmissionConfirmed: userDoc.isAdmissionConfirmed || false,
+        trialEndDate: userDoc.trialEndDate || null,
+        nextPaymentDueDate: feeInfo?.nextDueDate || null,
+        createdAt: userDoc.createdAt,
+        updatedAt: userDoc.updatedAt,
+      }
+    })
 
     return NextResponse.json({
       docs: formattedUsers,

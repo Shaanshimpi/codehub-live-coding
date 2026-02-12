@@ -9,10 +9,13 @@ import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
-import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal } from 'lucide-react'
+import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal, FolderOpen, LayoutTemplate } from 'lucide-react'
+import type { BasicFolderRef } from '@/utilities/workspaceScope'
+import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import { useTheme } from '@/providers/Theme'
+import { FolderExplorerView } from '@/components/Workspace/FolderExplorerView'
 
 type WorkspaceFile = {
   id: string
@@ -66,6 +69,12 @@ export function TrainerSessionWorkspace({
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('workspace')
+  const [currentFolderSlug, setCurrentFolderSlug] = useState<string | null>(null)
+  const [explorerFolders, setExplorerFolders] = useState<Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>>([])
+  const [explorerFiles, setExplorerFiles] = useState<Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>>([])
+  const [explorerLoading, setExplorerLoading] = useState(false)
+  const [explorerError, setExplorerError] = useState<string | null>(null)
   const [showFileModal, setShowFileModal] = useState(false)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [activeFileName, setActiveFileName] = useState<string>('')
@@ -84,6 +93,44 @@ export function TrainerSessionWorkspace({
   }>>({})
   
   const { theme: appTheme } = useTheme()
+
+  // Fetch folders and files for Explorer mode
+  useEffect(() => {
+    if (workspaceMode === 'explorer') {
+      const fetchExplorerData = async () => {
+        try {
+          setExplorerLoading(true)
+          setExplorerError(null)
+
+          const [foldersRes, filesRes] = await Promise.all([
+            fetch('/api/folders?limit=1000&depth=2', { credentials: 'include', cache: 'no-store' }),
+            fetch('/api/workspace/files', { credentials: 'include', cache: 'no-store' }),
+          ])
+
+          if (!foldersRes.ok) {
+            throw new Error('Failed to load folders')
+          }
+
+          if (!filesRes.ok) {
+            throw new Error('Failed to load files')
+          }
+
+          const foldersData = await foldersRes.json()
+          const filesData = await filesRes.json()
+
+          setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
+          setExplorerFiles((filesData.files || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
+        } catch (e) {
+          console.error('Error loading explorer data', e)
+          setExplorerError('Failed to load workspace data')
+        } finally {
+          setExplorerLoading(false)
+        }
+      }
+
+      fetchExplorerData()
+    }
+  }, [workspaceMode, currentFolderSlug])
 
   // Load active file from session on mount
   useEffect(() => {
@@ -525,18 +572,47 @@ export function TrainerSessionWorkspace({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* File Explorer Toggle */}
-          <button
-            onClick={() => setShowFileExplorer(!showFileExplorer)}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              showFileExplorer
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-          >
-            <Folder className="h-3 w-3" />
-          </button>
+          {/* Workspace Mode Toggle */}
+          <div className="flex items-center gap-1 rounded-md border bg-background overflow-hidden">
+            <button
+              onClick={() => setWorkspaceMode('explorer')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                workspaceMode === 'explorer'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-accent'
+              }`}
+              title="Explorer Mode - Browse folders"
+            >
+              <FolderOpen className="h-3 w-3" />
+              Explorer
+            </button>
+            <button
+              onClick={() => setWorkspaceMode('workspace')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                workspaceMode === 'workspace'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-accent'
+              }`}
+              title="Workspace Mode - Edit code"
+            >
+              <LayoutTemplate className="h-3 w-3" />
+              Workspace
+            </button>
+          </div>
+          {/* File Explorer Toggle (only in Workspace mode) */}
+          {workspaceMode === 'workspace' && (
+            <button
+              onClick={() => setShowFileExplorer(!showFileExplorer)}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                showFileExplorer
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+            >
+              <Folder className="h-3 w-3" />
+            </button>
+          )}
           {/* Output Toggle */}
           <button
             onClick={() => setShowOutput(!showOutput)}
@@ -760,26 +836,109 @@ export function TrainerSessionWorkspace({
       )}
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: File Explorer */}
-        {showFileExplorer && (
-          <div className="w-64 border-r bg-muted/30 overflow-hidden">
-            {switchingFile && (
-              <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-xs">Saving current file...</span>
+      {workspaceMode === 'explorer' ? (
+        /* Explorer Mode */
+        <div className="flex flex-1 overflow-hidden">
+          {(() => {
+            const currentFolder = currentFolderSlug
+              ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
+              : null
+            const childFolders = currentFolder
+              ? explorerFolders.filter(
+                  (f) => f.parentFolder && String(f.parentFolder.id) === String(currentFolder.id)
+                )
+              : explorerFolders.filter((f) => !f.parentFolder)
+            const childFiles = currentFolder
+              ? explorerFiles.filter((f) => f.folder && String(f.folder.id) === String(currentFolder.id))
+              : explorerFiles.filter((f) => !f.folder)
+
+            // Handler to refresh both explorer data and file explorer
+            const handleItemChanged = async () => {
+              // Refresh explorer data
+              try {
+                setExplorerLoading(true)
+                setExplorerError(null)
+
+                const [foldersRes, filesRes] = await Promise.all([
+                  fetch('/api/folders?limit=1000&depth=2', { credentials: 'include', cache: 'no-store' }),
+                  fetch('/api/workspace/files', { credentials: 'include', cache: 'no-store' }),
+                ])
+
+                if (foldersRes.ok && filesRes.ok) {
+                  const foldersData = await foldersRes.json()
+                  const filesData = await filesRes.json()
+
+                  setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
+                  setExplorerFiles((filesData.files || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
+                }
+              } catch (e) {
+                console.error('Error refreshing explorer data', e)
+                setExplorerError('Failed to refresh workspace data')
+              } finally {
+                setExplorerLoading(false)
+              }
+              
+              // Also refresh file explorer if in workspace mode
+              setRefreshKey((prev) => prev + 1)
+            }
+
+            return (
+              <FolderExplorerView
+                currentFolder={currentFolder}
+                childFolders={childFolders}
+                childFiles={childFiles}
+                loading={explorerLoading}
+                error={explorerError}
+                isRoot={!currentFolder}
+                allFolders={explorerFolders}
+                onOpenFolder={(slug) => {
+                  if (slug === '') {
+                    setCurrentFolderSlug(null)
+                  } else {
+                    setCurrentFolderSlug(slug)
+                  }
+                }}
+                onOpenFile={(fileId) => {
+                  handleFileSelect({
+                    id: fileId,
+                    name: '',
+                    content: '',
+                  })
+                  setWorkspaceMode('workspace')
+                }}
+                onOpenFolderInWorkspace={(slug) => {
+                  setCurrentFolderSlug(slug)
+                  setWorkspaceMode('workspace')
+                }}
+                onItemChanged={handleItemChanged}
+                readOnly={false}
+              />
+            )
+          })()}
+        </div>
+      ) : (
+        /* Workspace Mode */
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: File Explorer */}
+          {showFileExplorer && (
+            <div className="w-64 border-r bg-muted/30 overflow-hidden">
+              {switchingFile && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
+                  <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-xs">Saving current file...</span>
+                  </div>
                 </div>
-              </div>
-            )}
-            <FileExplorer
-              key={refreshKey}
-              onFileSelect={handleFileSelect}
-              selectedFileId={activeFileId || undefined}
-              onFileSaved={handleFileSaved}
-            />
-          </div>
-        )}
+              )}
+              <FileExplorer
+                key={refreshKey}
+                onFileSelect={handleFileSelect}
+                selectedFileId={activeFileId || undefined}
+                onFileSaved={handleFileSaved}
+                rootFolderSlug={currentFolderSlug || undefined}
+              />
+            </div>
+          )}
 
         {/* Center: Editor */}
         <div
@@ -914,7 +1073,8 @@ export function TrainerSessionWorkspace({
             />
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* File Selection Modal */}
       <FileSelectionModal

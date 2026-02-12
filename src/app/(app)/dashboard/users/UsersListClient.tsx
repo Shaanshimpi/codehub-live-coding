@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
 import { hasFullAccess } from '@/utilities/dashboardAccess'
 import type { User } from '@/payload-types'
 
@@ -14,6 +14,9 @@ interface UserListItem {
   role: 'admin' | 'manager' | 'trainer' | 'student'
   phone: string | null
   college: string | null
+  isAdmissionConfirmed?: boolean
+  trialEndDate?: string | null
+  nextPaymentDueDate?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -38,6 +41,7 @@ export function UsersListClient() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalDocs, setTotalDocs] = useState(0)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [admittingId, setAdmittingId] = useState<number | null>(null)
 
   const limit = 20
 
@@ -139,6 +143,34 @@ export function UsersListClient() {
     }
   }
 
+  const handleAdmit = async (userId: number) => {
+    try {
+      setAdmittingId(userId)
+      const res = await fetch(`/api/dashboard/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          isAdmissionConfirmed: true,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to mark user as admitted')
+      }
+
+      // Refresh list
+      fetchUsers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to mark user as admitted')
+    } finally {
+      setAdmittingId(null)
+    }
+  }
+
   const canEdit = currentUser ? hasFullAccess(currentUser) : false
 
   const roleColors = {
@@ -230,6 +262,8 @@ export function UsersListClient() {
                         <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Phone</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">College</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Trial End Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Next Payment Due</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Created</th>
                         <th className="px-4 py-3 text-right text-sm font-medium">Actions</th>
                       </tr>
@@ -257,6 +291,41 @@ export function UsersListClient() {
                             {user.college || 'N/A'}
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {user.trialEndDate 
+                              ? new Date(user.trialEndDate).toLocaleDateString('en-IN', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })
+                              : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {user.nextPaymentDueDate 
+                              ? (() => {
+                                  const dueDate = new Date(user.nextPaymentDueDate)
+                                  const now = new Date()
+                                  const isOverdue = dueDate < now
+                                  const daysDiff = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+                                  
+                                  return (
+                                    <span className={isOverdue ? 'text-destructive font-medium' : daysDiff <= 7 ? 'text-orange-600 dark:text-orange-400 font-medium' : ''}>
+                                      {dueDate.toLocaleDateString('en-IN', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                      })}
+                                      {isOverdue && (
+                                        <span className="ml-1 text-xs">({Math.abs(daysDiff)}d overdue)</span>
+                                      )}
+                                      {!isOverdue && daysDiff <= 7 && (
+                                        <span className="ml-1 text-xs">({daysDiff}d remaining)</span>
+                                      )}
+                                    </span>
+                                  )
+                                })()
+                              : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
                             {new Date(user.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-4 py-3">
@@ -270,6 +339,16 @@ export function UsersListClient() {
                               </Link>
                               {canEdit && (
                                 <>
+                                  {user.role === 'student' && !user.isAdmissionConfirmed && (
+                                    <button
+                                      onClick={() => handleAdmit(user.id)}
+                                      disabled={admittingId === user.id}
+                                      className="rounded-md p-1.5 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900 dark:hover:text-green-200 transition-colors disabled:opacity-50"
+                                      title="Mark as Admitted"
+                                    >
+                                      <CheckCircle className="h-4 w-4" />
+                                    </button>
+                                  )}
                                   <Link
                                     href={`/dashboard/users/${user.id}/edit`}
                                     className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, Radio, Folder, Terminal, Download, Upload, ArrowLeft } from 'lucide-react'
+import { Sparkles, Radio, Folder, Terminal, Download, Upload, ArrowLeft, FolderOpen, LayoutTemplate, File as FileIcon } from 'lucide-react'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
@@ -17,6 +17,7 @@ import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
 import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
 import { UploadModal } from './UploadModal'
 import { buildFolderPathChain, type BasicFolderRef } from '@/utilities/workspaceScope'
+import { FolderExplorerView } from './FolderExplorerView'
 
 type WorkspaceFile = {
   id: string
@@ -56,6 +57,13 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
   const [scopedFolder, setScopedFolder] = useState<(BasicFolderRef & { slug?: string | null }) | null>(null)
   const [scopedFolderLoading, setScopedFolderLoading] = useState(false)
+  // Default to Explorer mode for root workspace, Workspace mode for scoped folders
+  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>(scopeFolderSlug ? 'workspace' : 'explorer')
+  const [explorerFolders, setExplorerFolders] = useState<Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>>([])
+  const [explorerFiles, setExplorerFiles] = useState<Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>>([])
+  const [explorerLoading, setExplorerLoading] = useState(false)
+  const [explorerError, setExplorerError] = useState<string | null>(null)
+  const [currentFolderSlug, setCurrentFolderSlug] = useState<string | null>(scopeFolderSlug || null)
 
   // Update code (and infer language from extension) when file changes
   useEffect(() => {
@@ -230,6 +238,11 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
     checkPaymentStatus()
   }, [])
 
+  // Update currentFolderSlug when scopeFolderSlug changes
+  useEffect(() => {
+    setCurrentFolderSlug(scopeFolderSlug || null)
+  }, [scopeFolderSlug])
+
   // Fetch scoped folder data when scopeFolderSlug is provided
   useEffect(() => {
     if (scopeFolderSlug) {
@@ -262,6 +275,51 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
     }
   }, [scopeFolderSlug])
 
+  // Fetch folders and files for Explorer mode
+  useEffect(() => {
+    if (workspaceMode === 'explorer') {
+      const fetchExplorerData = async () => {
+        try {
+          setExplorerLoading(true)
+          setExplorerError(null)
+
+          const foldersEndpoint = userId 
+            ? `/api/dashboard/workspace/${userId}/folders`
+            : '/api/folders?limit=1000&depth=2'
+          const filesEndpoint = userId
+            ? `/api/dashboard/workspace/${userId}/files`
+            : '/api/workspace/files'
+
+          const [foldersRes, filesRes] = await Promise.all([
+            fetch(foldersEndpoint, { credentials: 'include', cache: 'no-store' }),
+            fetch(filesEndpoint, { credentials: 'include', cache: 'no-store' }),
+          ])
+
+          if (!foldersRes.ok) {
+            throw new Error('Failed to load folders')
+          }
+
+          if (!filesRes.ok) {
+            throw new Error('Failed to load files')
+          }
+
+          const foldersData = await foldersRes.json()
+          const filesData = await filesRes.json()
+
+          setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
+          setExplorerFiles((filesData.files || filesData.docs || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
+        } catch (e) {
+          console.error('Error loading explorer data', e)
+          setExplorerError('Failed to load workspace data')
+        } finally {
+          setExplorerLoading(false)
+        }
+      }
+
+      fetchExplorerData()
+    }
+  }, [workspaceMode, currentFolderSlug, userId])
+
   const scopedBreadcrumb = scopedFolder ? buildFolderPathChain(scopedFolder) : []
 
   // Show payment blocked screen if student is blocked
@@ -290,15 +348,34 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
             <Link href="/" className="text-lg font-semibold">
               CodeHub
             </Link>
-            {scopeFolderSlug && scopedFolder ? (
-              <div className="flex items-center gap-2 min-w-0">
-                <Link
-                  href={`/workspace/explorer/${scopedFolder.slug || scopedFolder.id}`}
-                  className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[10px] font-medium hover:bg-accent transition-colors"
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1 rounded-md border bg-background overflow-hidden">
+                <button
+                  onClick={() => setWorkspaceMode('explorer')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    workspaceMode === 'explorer'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="Explorer Mode - Browse folders"
                 >
-                  <ArrowLeft className="h-3 w-3" />
-                  Back to Explorer
-                </Link>
+                  <FolderOpen className="h-3 w-3" />
+                  Explorer
+                </button>
+                <button
+                  onClick={() => setWorkspaceMode('workspace')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    workspaceMode === 'workspace'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="Workspace Mode - Edit code"
+                >
+                  <LayoutTemplate className="h-3 w-3" />
+                  Workspace
+                </button>
+              </div>
+              {scopeFolderSlug && scopedFolder ? (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
                   <Link
                     href="/workspace"
@@ -328,25 +405,27 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                     )
                   })}
                 </div>
-              </div>
-            ) : (
-              <span className="text-sm text-muted-foreground">Workspace</span>
-            )}
+              ) : (
+                <span className="text-sm text-muted-foreground">Workspace</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
-          {/* File Explorer Toggle */}
-          <button
-            onClick={() => setShowFileExplorer(!showFileExplorer)}
-            disabled={uploading}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-              showFileExplorer
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-          >
-            <Folder className="h-4 w-4" />
-          </button>
+          {/* File Explorer Toggle (only in Workspace mode) */}
+          {workspaceMode === 'workspace' && (
+            <button
+              onClick={() => setShowFileExplorer(!showFileExplorer)}
+              disabled={uploading}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                showFileExplorer
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+            >
+              <Folder className="h-4 w-4" />
+            </button>
+          )}
           {/* Output Toggle */}
           <button
             onClick={() => setShowOutput(!showOutput)}
@@ -411,19 +490,48 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
       {/* Dashboard Workspace View - Show controls bar when userId is provided */}
       {userId && (
         <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
-          {/* File Explorer Toggle */}
-          <button
-            onClick={() => setShowFileExplorer(!showFileExplorer)}
-            disabled={uploading}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-              showFileExplorer
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-          >
-            <Folder className="h-4 w-4" />
-          </button>
+          {/* Workspace Mode Toggle */}
+          <div className="flex items-center gap-1 rounded-md border bg-background overflow-hidden">
+            <button
+              onClick={() => setWorkspaceMode('explorer')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                workspaceMode === 'explorer'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-accent'
+              }`}
+              title="Explorer Mode - Browse folders"
+            >
+              <FolderOpen className="h-3 w-3" />
+              Explorer
+            </button>
+            <button
+              onClick={() => setWorkspaceMode('workspace')}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                workspaceMode === 'workspace'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background hover:bg-accent'
+              }`}
+              title="Workspace Mode - Edit code"
+            >
+              <LayoutTemplate className="h-3 w-3" />
+              Workspace
+            </button>
+          </div>
+          {/* File Explorer Toggle (only in Workspace mode) */}
+          {workspaceMode === 'workspace' && (
+            <button
+              onClick={() => setShowFileExplorer(!showFileExplorer)}
+              disabled={uploading}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                showFileExplorer
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+            >
+              <Folder className="h-4 w-4" />
+            </button>
+          )}
           {/* Output Toggle */}
           <button
             onClick={() => setShowOutput(!showOutput)}
@@ -478,91 +586,191 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
       )}
 
       {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left: File Explorer */}
-        {showFileExplorer && (
-          <div className="w-64 border-r bg-muted/30 overflow-hidden">
-            <FileExplorer
-              key={refreshKey}
-              onFileSelect={handleFileSelect}
-              selectedFileId={selectedFile?.id}
-              onFileSaved={handleFileSaved}
-              userId={userId}
-              readOnly={readOnly}
-              rootFolderSlug={scopeFolderSlug}
-            />
-          </div>
-        )}
+      {workspaceMode === 'explorer' ? (
+        /* Explorer Mode */
+        <div className="flex flex-1 overflow-hidden">
+          {(() => {
+            const currentFolder = currentFolderSlug
+              ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
+              : null
+            const childFolders = currentFolder
+              ? explorerFolders.filter(
+                  (f) => f.parentFolder && String(f.parentFolder.id) === String(currentFolder.id)
+                )
+              : explorerFolders.filter((f) => !f.parentFolder)
+            const childFiles = currentFolder
+              ? explorerFiles.filter((f) => f.folder && String(f.folder.id) === String(currentFolder.id))
+              : explorerFiles.filter((f) => !f.folder)
 
-        {/* Center: Editor */}
-        <div
-          className={`flex flex-1 flex-col overflow-hidden ${
-            showAI
-              ? showFileExplorer && showOutput
-                ? 'max-w-[50%]'
-                : 'max-w-[65%]'
-              : ''
-          }`}
-        >
-          {selectedFile ? (
-            <WorkspaceEditor
-              fileId={selectedFile.id}
-              fileName={selectedFile.name}
-              code={code}
-              language={language}
-              onLanguageChange={setLanguage}
-              onChange={setCode}
-              onRun={handleRun}
-              executing={executing}
-              onSave={handleFileSaved}
-              readOnly={readOnly}
-              allowRunInReadOnly={readOnly}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center space-y-2">
-                <p className="text-muted-foreground">No file selected</p>
-                <p className="text-sm text-muted-foreground">Select a file from the explorer or create a new one</p>
+            // Handler to refresh both explorer data and file explorer
+            const handleItemChanged = async () => {
+              // Refresh explorer data
+              try {
+                setExplorerLoading(true)
+                setExplorerError(null)
+
+                const foldersEndpoint = userId 
+                  ? `/api/dashboard/workspace/${userId}/folders`
+                  : '/api/folders?limit=1000&depth=2'
+                const filesEndpoint = userId
+                  ? `/api/dashboard/workspace/${userId}/files`
+                  : '/api/workspace/files'
+
+                const [foldersRes, filesRes] = await Promise.all([
+                  fetch(foldersEndpoint, { credentials: 'include', cache: 'no-store' }),
+                  fetch(filesEndpoint, { credentials: 'include', cache: 'no-store' }),
+                ])
+
+                if (foldersRes.ok && filesRes.ok) {
+                  const foldersData = await foldersRes.json()
+                  const filesData = await filesRes.json()
+
+                  setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
+                  setExplorerFiles((filesData.files || filesData.docs || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
+                }
+              } catch (e) {
+                console.error('Error refreshing explorer data', e)
+              } finally {
+                setExplorerLoading(false)
+              }
+              
+              // Also refresh file explorer in workspace mode
+              setRefreshKey((prev) => prev + 1)
+            }
+
+            return (
+              <FolderExplorerView
+                currentFolder={currentFolder}
+                childFolders={childFolders}
+                childFiles={childFiles}
+                loading={explorerLoading}
+                error={explorerError}
+                isRoot={!currentFolder}
+                allFolders={explorerFolders}
+                onOpenFolder={(slug) => {
+                  if (slug === '') {
+                    setCurrentFolderSlug(null)
+                  } else {
+                    setCurrentFolderSlug(slug)
+                  }
+                }}
+                onOpenFile={async (fileId) => {
+                  // Fetch file content and select it
+                  try {
+                    const fileRes = await fetch(`/api/files/${fileId}`, {
+                      credentials: 'include',
+                    })
+                    if (fileRes.ok) {
+                      const fileData = await fileRes.json()
+                      handleFileSelect({
+                        id: String(fileData.id),
+                        name: fileData.name,
+                        content: fileData.content || '',
+                      })
+                      setWorkspaceMode('workspace')
+                    }
+                  } catch (error) {
+                    console.error('Failed to load file:', error)
+                  }
+                }}
+                onOpenFolderInWorkspace={(slug) => {
+                  setCurrentFolderSlug(slug)
+                  setWorkspaceMode('workspace')
+                }}
+                onItemChanged={handleItemChanged}
+                readOnly={readOnly}
+              />
+            )
+          })()}
+        </div>
+      ) : (
+        /* Workspace Mode */
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left: File Explorer */}
+          {showFileExplorer && (
+            <div className="w-64 border-r bg-muted/30 overflow-hidden">
+              <FileExplorer
+                key={refreshKey}
+                onFileSelect={handleFileSelect}
+                selectedFileId={selectedFile?.id}
+                onFileSaved={handleFileSaved}
+                userId={userId}
+                readOnly={readOnly}
+                rootFolderSlug={currentFolderSlug || undefined}
+              />
+            </div>
+          )}
+
+          {/* Center: Editor */}
+          <div
+            className={`flex flex-1 flex-col overflow-hidden ${
+              showAI
+                ? showFileExplorer && showOutput
+                  ? 'max-w-[50%]'
+                  : 'max-w-[65%]'
+                : ''
+            }`}
+          >
+            {selectedFile ? (
+              <WorkspaceEditor
+                fileId={selectedFile.id}
+                fileName={selectedFile.name}
+                code={code}
+                language={language}
+                onLanguageChange={setLanguage}
+                onChange={setCode}
+                onRun={handleRun}
+                executing={executing}
+                onSave={handleFileSaved}
+                readOnly={readOnly}
+                allowRunInReadOnly={readOnly}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <div className="text-center space-y-2">
+                  <p className="text-muted-foreground">No file selected</p>
+                  <p className="text-sm text-muted-foreground">Select a file from the explorer or create a new one</p>
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* Right: Output + AI */}
+          {showOutput && (
+            <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
+              {/* Output Panel */}
+              <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
+                <div className="border-b bg-muted/30 px-3 py-1.5">
+                  <h2 className="text-xs font-medium">Output</h2>
+                </div>
+                <OutputPanel
+                  result={executionResult}
+                  executing={executing}
+                  onClear={() => setExecutionResult(null)}
+                />
+              </div>
+
+            </div>
+          )}
+
+          {/* AI Assistant Panel */}
+          {showAI && selectedFile && (
+            <div className="w-[35%] border-l bg-muted/30 p-2">
+              <AIAssistantPanel
+                role="student"
+                lectureId="workspace" // Not a real lecture, but needed for AI
+                language={language}
+                code={code}
+                output={executionResult?.stdout || executionResult?.stderr}
+                onClose={() => setShowAI(false)}
+                onInsertCode={(newCode) => {
+                  setCode(newCode)
+                }}
+              />
             </div>
           )}
         </div>
-
-        {/* Right: Output + AI */}
-        {showOutput && (
-          <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
-            {/* Output Panel */}
-            <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
-              <div className="border-b bg-muted/30 px-3 py-1.5">
-                <h2 className="text-xs font-medium">Output</h2>
-              </div>
-              <OutputPanel
-                result={executionResult}
-                executing={executing}
-                onClear={() => setExecutionResult(null)}
-              />
-            </div>
-
-          </div>
-        )}
-
-        {/* AI Assistant Panel */}
-        {showAI && selectedFile && (
-          <div className="w-[35%] border-l bg-muted/30 p-2">
-            <AIAssistantPanel
-              role="student"
-              lectureId="workspace" // Not a real lecture, but needed for AI
-              language={language}
-              code={code}
-              output={executionResult?.stdout || executionResult?.stderr}
-              onClose={() => setShowAI(false)}
-              onInsertCode={(newCode) => {
-                setCode(newCode)
-              }}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Payment Due Modal */}
       {paymentStatus?.isDueSoon && paymentStatus.nextInstallment && (
