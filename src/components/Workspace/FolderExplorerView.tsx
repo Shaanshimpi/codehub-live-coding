@@ -424,7 +424,11 @@ export function FolderExplorerView({
           itemType={showMoveModal.type}
           itemId={showMoveModal.id}
           currentParentId={showMoveModal.currentParentId}
-          folders={allFolders}
+          folders={allFolders.filter(f => f.name).map(f => ({ 
+            id: f.id, 
+            name: f.name!, 
+            parentFolder: f.parentFolder ? { id: f.parentFolder.id, name: f.parentFolder.name || undefined } : null 
+          }))}
           onClose={() => setShowMoveModal(null)}
           onSuccess={() => {
             setShowMoveModal(null)

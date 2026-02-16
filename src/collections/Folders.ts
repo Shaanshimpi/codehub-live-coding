@@ -1,4 +1,4 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig, TextFieldSingleValidation } from 'payload'
 
 // Helper function to generate URL-friendly slug from name
 function generateSlug(name: string): string {
@@ -97,22 +97,22 @@ export const Folders: CollectionConfig = {
           },
         ],
       },
-      validate: async (value, { data, req, operation }) => {
+      validate: (async (value, options) => {
         if (!value) return 'Slug is required'
         if (!/^[a-z0-9-]+$/.test(value)) {
           return 'Slug can only contain lowercase letters, numbers, and hyphens'
         }
 
         // Check uniqueness per user
-        if (req.user) {
-          const existing = await req.payload.find({
+        if (options?.req?.user) {
+          const existing = await options.req.payload.find({
             collection: 'folders',
             where: {
               and: [
                 { slug: { equals: value } },
-                { user: { equals: req.user.id } },
-                ...(operation === 'update' && data?.id
-                  ? [{ id: { not_equals: data.id } }]
+                { user: { equals: options.req.user.id } },
+                ...(options.operation === 'update' && (options.data as any)?.id
+                  ? [{ id: { not_equals: (options.data as any).id } }]
                   : []),
               ],
             },
@@ -125,7 +125,7 @@ export const Folders: CollectionConfig = {
         }
 
         return true
-      },
+      }) as TextFieldSingleValidation,
     },
     {
       name: 'user',

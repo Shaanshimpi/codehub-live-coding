@@ -103,6 +103,17 @@ export function TrainerSessionWorkspace({
   
   const { theme: appTheme } = useTheme()
 
+  // Compute current folder and filtered folders/files for explorer mode
+  const currentFolder = currentFolderSlug
+    ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
+    : null
+  
+  const { childFolders, childFiles } = useFolderFileFilter({
+    folders: explorerFolders,
+    files: explorerFiles,
+    currentFolder,
+  })
+
   // Fetch folders and files for Explorer mode
   useEffect(() => {
     if (workspaceMode === 'explorer') {
@@ -828,16 +839,6 @@ export function TrainerSessionWorkspace({
         /* Explorer Mode */
         <div className="flex flex-1 overflow-hidden">
           {(() => {
-            const currentFolder = currentFolderSlug
-              ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
-              : null
-            
-            const { childFolders, childFiles } = useFolderFileFilter({
-              folders: explorerFolders,
-              files: explorerFiles,
-              currentFolder,
-            })
-
             // Handler to refresh both explorer data and file explorer
             const handleItemChanged = async () => {
               // Refresh explorer data

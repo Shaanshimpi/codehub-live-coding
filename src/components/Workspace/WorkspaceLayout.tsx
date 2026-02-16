@@ -25,6 +25,7 @@ import { NoFileSelectedView } from './NoFileSelectedView'
 import { FileExplorerSidebar } from './FileExplorerSidebar'
 import { OutputPanelWrapper } from './OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from './AIAssistantPanelWrapper'
+import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
 
 type WorkspaceFile = {
   id: string
@@ -249,6 +250,17 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
   useEffect(() => {
     setCurrentFolderSlug(scopeFolderSlug || null)
   }, [scopeFolderSlug])
+
+  // Compute current folder and filtered folders/files for explorer mode
+  const currentFolder = currentFolderSlug
+    ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
+    : null
+  
+  const { childFolders, childFiles } = useFolderFileFilter({
+    folders: explorerFolders,
+    files: explorerFiles,
+    currentFolder,
+  })
 
   // Fetch scoped folder data when scopeFolderSlug is provided
   useEffect(() => {
@@ -560,16 +572,6 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
         /* Explorer Mode */
         <div className="flex flex-1 overflow-hidden">
           {(() => {
-            const currentFolder = currentFolderSlug
-              ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
-              : null
-            
-            const { childFolders, childFiles } = useFolderFileFilter({
-              folders: explorerFolders,
-              files: explorerFiles,
-              currentFolder,
-            })
-
             // Handler to refresh both explorer data and file explorer
             const handleItemChanged = async () => {
               // Refresh explorer data

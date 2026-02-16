@@ -308,6 +308,17 @@ export function StudentSessionWorkspace({
     }
   }, [sessionCode, selectedFile])
 
+  // Compute current folder and filtered folders/files for explorer mode
+  const currentFolder = currentFolderSlug
+    ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
+    : null
+  
+  const { childFolders, childFiles } = useFolderFileFilter({
+    folders: explorerFolders,
+    files: explorerFiles,
+    currentFolder,
+  })
+
   const saveCurrentFile = useCallback(async (): Promise<boolean> => {
     if (!selectedFile || !sessionCode) return false
 
@@ -855,16 +866,6 @@ export function StudentSessionWorkspace({
             /* Explorer Mode */
             <div className="flex flex-1 overflow-hidden">
               {(() => {
-                const currentFolder = currentFolderSlug
-                  ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
-                  : null
-                
-                const { childFolders, childFiles } = useFolderFileFilter({
-                  folders: explorerFolders,
-                  files: explorerFiles,
-                  currentFolder,
-                })
-
                 return (
                   <FolderExplorerView
                     currentFolder={currentFolder}

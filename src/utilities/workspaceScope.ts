@@ -46,9 +46,13 @@ export function buildFolderPathChain(folder: BasicFolderRef | null | undefined):
       slug: current.slug ?? null,
     })
 
-    const parent = current.parentFolder
+    const parent: BasicFolderRef | null = current.parentFolder
+      ? (typeof current.parentFolder === 'object' && current.parentFolder !== null 
+          ? current.parentFolder as BasicFolderRef 
+          : null)
+      : null
     if (!parent) break
-    current = typeof parent === 'object' ? (parent as BasicFolderRef) : null
+    current = parent
   }
 
   return chain
