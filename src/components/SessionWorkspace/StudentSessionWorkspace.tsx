@@ -7,9 +7,18 @@ import { WorkspaceEditor } from '@/components/Workspace/WorkspaceEditor'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { FolderExplorerView } from '@/components/Workspace/FolderExplorerView'
+import { WorkspaceModeToggle } from '@/components/Workspace/WorkspaceModeToggle'
+import { WorkspaceModeLayout } from '@/components/Workspace/WorkspaceModeLayout'
+import { WorkspaceHeader } from '@/components/Workspace/WorkspaceHeader'
+import { NoFileSelectedView } from '@/components/Workspace/NoFileSelectedView'
+import { FileExplorerSidebar } from '@/components/Workspace/FileExplorerSidebar'
+import { OutputPanelWrapper } from '@/components/Workspace/OutputPanelWrapper'
+import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
+import { FileSwitchingOverlay } from '@/components/Workspace/FileSwitchingOverlay'
+import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
-import { Radio, Sparkles, Eye, File, CheckCircle, Loader2, Save, ArrowLeft, Bell, RefreshCw, Folder, Terminal, FolderOpen, LayoutTemplate } from 'lucide-react'
+import { Radio, Sparkles, Eye, File, CheckCircle, Loader2, Save, ArrowLeft, Bell, RefreshCw, Folder, Terminal } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
@@ -612,110 +621,93 @@ export function StudentSessionWorkspace({
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
       {/* Session Header */}
-      <header className="flex items-center justify-between border-b bg-card px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Radio className="h-4 w-4 text-red-500" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{sessionTitle}</span>
-            <span className="text-[10px] text-muted-foreground">Join code: {sessionCode}</span>
-            {trainerFileName && (
-              <span className="text-xs text-muted-foreground">Trainer: {trainerFileName}</span>
-            )}
-            {activeFileName && (
-              <span className="text-xs text-primary font-medium">My file: {activeFileName}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Toggles for "My Code" tab */}
-          {activeTab === 'mycode' && (
-            <>
-              {/* Workspace Mode Toggle */}
-              <div className="flex items-center gap-1 rounded-md border bg-background overflow-hidden">
-                <button
-                  onClick={() => setWorkspaceMode('explorer')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    workspaceMode === 'explorer'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background hover:bg-accent'
-                  }`}
-                  title="Explorer Mode - Browse folders"
-                >
-                  <FolderOpen className="h-3 w-3" />
-                  Explorer
-                </button>
-                <button
-                  onClick={() => setWorkspaceMode('workspace')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    workspaceMode === 'workspace'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-background hover:bg-accent'
-                  }`}
-                  title="Workspace Mode - Edit code"
-                >
-                  <LayoutTemplate className="h-3 w-3" />
-                  Workspace
-                </button>
-              </div>
-              {/* File Explorer Toggle (only in Workspace mode) */}
-              {workspaceMode === 'workspace' && (
-                <button
-                  onClick={() => setShowFileExplorer(!showFileExplorer)}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    showFileExplorer
-                      ? 'bg-card hover:bg-accent'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
-                  title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-                >
-                  <Folder className="h-3 w-3" />
-                </button>
+      <WorkspaceHeader
+        leftContent={
+          <>
+            <Radio className="h-4 w-4 text-red-500" />
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">{sessionTitle}</span>
+              <span className="text-[10px] text-muted-foreground">Join code: {sessionCode}</span>
+              {trainerFileName && (
+                <span className="text-xs text-muted-foreground">Trainer: {trainerFileName}</span>
               )}
-              {/* AI Help Toggle */}
-              {selectedFile && (
-                <button
-                  onClick={() => setShowAI(!showAI)}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    showAI
-                      ? 'bg-card hover:bg-accent'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
-                  title={showAI ? 'Hide AI Help' : 'Show AI Help'}
-                >
-                  <Sparkles className="h-3 w-3" />
-                </button>
+              {activeFileName && (
+                <span className="text-xs text-primary font-medium">My file: {activeFileName}</span>
               )}
-            </>
-          )}
-          {/* Output Toggle (shown in both tabs) */}
-          <button
-            onClick={() => setShowOutput(!showOutput)}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              showOutput
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-            title={showOutput ? 'Hide Output' : 'Show Output'}
-          >
-            <Terminal className="h-3 w-3" />
-          </button>
-          {lastUpdate && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground" suppressHydrationWarning>
-              <span>Last update: {lastUpdate.toLocaleTimeString()}</span>
             </div>
-          )}
-          {!sessionActive && (
-            <Link
-              href="/workspace"
-              className="flex items-center gap-1.5 rounded-md border bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+          </>
+        }
+        rightContent={
+          <>
+            {/* Toggles for "My Code" tab */}
+            {activeTab === 'mycode' && (
+              <>
+                {/* Workspace Mode Toggle */}
+                <WorkspaceModeToggle
+                  mode={workspaceMode}
+                  onChange={setWorkspaceMode}
+                  data-testid="mode-toggle"
+                />
+                {/* File Explorer Toggle (only in Workspace mode) */}
+                {workspaceMode === 'workspace' && (
+                  <button
+                    onClick={() => setShowFileExplorer(!showFileExplorer)}
+                    className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      showFileExplorer
+                        ? 'bg-card hover:bg-accent'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
+                  >
+                    <Folder className="h-3 w-3" />
+                  </button>
+                )}
+                {/* AI Help Toggle */}
+                {selectedFile && (
+                  <button
+                    onClick={() => setShowAI(!showAI)}
+                    className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      showAI
+                        ? 'bg-card hover:bg-accent'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    title={showAI ? 'Hide AI Help' : 'Show AI Help'}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                  </button>
+                )}
+              </>
+            )}
+            {/* Output Toggle (shown in both tabs) */}
+            <button
+              onClick={() => setShowOutput(!showOutput)}
+              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                showOutput
+                  ? 'bg-card hover:bg-accent'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              title={showOutput ? 'Hide Output' : 'Show Output'}
             >
-              <ArrowLeft className="h-3 w-3" />
-              Back to Workspace
-            </Link>
-          )}
-        </div>
-      </header>
+              <Terminal className="h-3 w-3" />
+            </button>
+            {lastUpdate && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground" suppressHydrationWarning>
+                <span>Last update: {lastUpdate.toLocaleTimeString()}</span>
+              </div>
+            )}
+            {!sessionActive && (
+              <Link
+                href="/workspace"
+                className="flex items-center gap-1.5 rounded-md border bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Back to Workspace
+              </Link>
+            )}
+          </>
+        }
+        data-testid="workspace-header"
+      />
 
       {!sessionActive && (
         <div className="border-b bg-destructive/10 px-4 py-2 text-xs text-destructive">
@@ -866,14 +858,12 @@ export function StudentSessionWorkspace({
                 const currentFolder = currentFolderSlug
                   ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
                   : null
-                const childFolders = currentFolder
-                  ? explorerFolders.filter(
-                      (f) => f.parentFolder && String(f.parentFolder.id) === String(currentFolder.id)
-                    )
-                  : explorerFolders.filter((f) => !f.parentFolder)
-                const childFiles = currentFolder
-                  ? explorerFiles.filter((f) => f.folder && String(f.folder.id) === String(currentFolder.id))
-                  : explorerFiles.filter((f) => !f.folder)
+                
+                const { childFolders, childFiles } = useFolderFileFilter({
+                  folders: explorerFolders,
+                  files: explorerFiles,
+                  currentFolder,
+                })
 
                 return (
                   <FolderExplorerView
@@ -949,18 +939,13 @@ export function StudentSessionWorkspace({
             </div>
           ) : (
             /* Workspace Mode */
-            <div className="flex flex-1 overflow-hidden">
-              {/* Left: File Explorer */}
-              {showFileExplorer && (
-                <div className="w-64 border-r bg-muted/30 overflow-hidden">
-                  {switchingFile && (
-                    <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                      <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-xs">Saving current file...</span>
-                      </div>
-                    </div>
-                  )}
+            <WorkspaceModeLayout
+              fileExplorer={
+                <FileExplorerSidebar
+                  loadingOverlay={
+                    <FileSwitchingOverlay visible={switchingFile} />
+                  }
+                >
                   <FileExplorer
                     key={refreshKey}
                     onFileSelect={handleFileSelect}
@@ -968,20 +953,10 @@ export function StudentSessionWorkspace({
                     onFileSaved={handleFileSaved}
                     rootFolderSlug={currentFolderSlug || undefined}
                   />
-                </div>
-              )}
-
-              {/* Center: Editor */}
-              <div
-                className={`flex flex-1 flex-col overflow-hidden ${
-                  showAI
-                    ? showFileExplorer && showOutput
-                      ? 'max-w-[50%]'
-                      : 'max-w-[65%]'
-                    : ''
-                }`}
-              >
-                {selectedFile ? (
+                </FileExplorerSidebar>
+              }
+              editor={
+                selectedFile ? (
                   <>
                     <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5">
                       <div className="flex items-center gap-2">
@@ -1058,52 +1033,41 @@ export function StudentSessionWorkspace({
                     />
                   </>
                 ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center space-y-4">
-                      <p className="text-muted-foreground">No file selected</p>
-                      <button
-                        onClick={() => setShowFileModal(true)}
-                        className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 transition-colors"
-                      >
-                        Select or Create File
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Right: Output + AI */}
-              {showOutput && (
-                <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
-                  <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
-                    <div className="border-b bg-muted/30 px-3 py-1.5">
-                      <h2 className="text-xs font-medium">Output</h2>
-                    </div>
-                    <OutputPanel
-                      result={executionResult}
-                      executing={executing}
-                      onClear={() => setExecutionResult(null)}
-                    />
-                  </div>
-
-                </div>
-              )}
-
-              {/* AI Assistant Panel */}
-              {showAI && selectedFile && (
-                <div className="w-[35%] border-l bg-muted/30 p-2">
-                  <AIAssistantPanel
-                    role="student"
-                    lectureId={sessionCode}
-                    language={language}
-                    code={code}
-                    output={executionResult?.stdout || executionResult?.stderr}
-                    onClose={() => setShowAI(false)}
-                    onInsertCode={(newCode) => setCode(newCode)}
+                  <NoFileSelectedView
+                    actionText="Select or Create File"
+                    onAction={() => setShowFileModal(true)}
                   />
-                </div>
-              )}
-            </div>
+                )
+              }
+              outputPanel={
+                <OutputPanelWrapper>
+                  <OutputPanel
+                    result={executionResult}
+                    executing={executing}
+                    onClear={() => setExecutionResult(null)}
+                  />
+                </OutputPanelWrapper>
+              }
+              aiPanel={
+                selectedFile ? (
+                  <AIAssistantPanelWrapper>
+                    <AIAssistantPanel
+                      role="student"
+                      lectureId={sessionCode}
+                      language={language}
+                      code={code}
+                      output={executionResult?.stdout || executionResult?.stderr}
+                      onClose={() => setShowAI(false)}
+                      onInsertCode={(newCode) => setCode(newCode)}
+                    />
+                  </AIAssistantPanelWrapper>
+                ) : null
+              }
+              showFileExplorer={showFileExplorer}
+              showOutput={showOutput}
+              showAI={showAI && !!selectedFile}
+              data-testid="workspace-layout"
+            />
           )
         )}
       </div>

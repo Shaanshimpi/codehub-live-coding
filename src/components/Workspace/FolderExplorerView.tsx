@@ -179,7 +179,7 @@ export function FolderExplorerView({
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden">
+    <div className="flex h-screen w-screen flex-col overflow-hidden" data-testid="folder-explorer-view">
       {/* Header with breadcrumb */}
       <header className="flex items-center justify-between border-b bg-card px-4 py-2">
         <div className="flex flex-1 items-center gap-3 overflow-hidden">
@@ -221,7 +221,7 @@ export function FolderExplorerView({
             <span className="text-xs font-semibold text-muted-foreground">
               {isRoot ? 'Workspace Explorer' : 'Folder Explorer'}
             </span>
-            <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground" data-testid="breadcrumb">
               {onOpenFolder ? (
                 <button
                   onClick={() => onOpenFolder('')}
@@ -459,7 +459,7 @@ function FolderCard({
   const [showMenu, setShowMenu] = useState(false)
 
   return (
-    <div className="group relative flex flex-col justify-between rounded-lg border bg-card px-3 py-2 shadow-sm hover:bg-accent/40 transition-colors">
+    <div className="group relative flex flex-col justify-between rounded-lg border bg-card px-3 py-2 shadow-sm hover:bg-accent/40 transition-colors" data-testid="folder-item">
       <div className="flex items-center justify-between gap-2">
         <div
           onClick={onOpenFolder}
@@ -581,7 +581,7 @@ function FileCard({
   const [showMenu, setShowMenu] = useState(false)
 
   return (
-    <div className="group flex items-center justify-between rounded-md border bg-card px-3 py-1.5 text-xs">
+    <div className="group flex items-center justify-between rounded-md border bg-card px-3 py-1.5 text-xs" data-testid="file-item">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="truncate">{file.name}</span>

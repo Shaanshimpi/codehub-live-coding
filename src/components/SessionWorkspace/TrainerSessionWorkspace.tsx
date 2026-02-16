@@ -9,13 +9,22 @@ import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
-import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal, FolderOpen, LayoutTemplate } from 'lucide-react'
+import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal } from 'lucide-react'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import { useTheme } from '@/providers/Theme'
 import { FolderExplorerView } from '@/components/Workspace/FolderExplorerView'
+import { WorkspaceModeToggle } from '@/components/Workspace/WorkspaceModeToggle'
+import { WorkspaceModeLayout } from '@/components/Workspace/WorkspaceModeLayout'
+import { WorkspaceHeader } from '@/components/Workspace/WorkspaceHeader'
+import { NoFileSelectedView } from '@/components/Workspace/NoFileSelectedView'
+import { FileExplorerSidebar } from '@/components/Workspace/FileExplorerSidebar'
+import { OutputPanelWrapper } from '@/components/Workspace/OutputPanelWrapper'
+import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
+import { FileSwitchingOverlay } from '@/components/Workspace/FileSwitchingOverlay'
+import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
 
 type WorkspaceFile = {
   id: string
@@ -573,32 +582,11 @@ export function TrainerSessionWorkspace({
 
         <div className="flex items-center gap-3">
           {/* Workspace Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-md border bg-background overflow-hidden">
-            <button
-              onClick={() => setWorkspaceMode('explorer')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                workspaceMode === 'explorer'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background hover:bg-accent'
-              }`}
-              title="Explorer Mode - Browse folders"
-            >
-              <FolderOpen className="h-3 w-3" />
-              Explorer
-            </button>
-            <button
-              onClick={() => setWorkspaceMode('workspace')}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                workspaceMode === 'workspace'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background hover:bg-accent'
-              }`}
-              title="Workspace Mode - Edit code"
-            >
-              <LayoutTemplate className="h-3 w-3" />
-              Workspace
-            </button>
-          </div>
+          <WorkspaceModeToggle
+            mode={workspaceMode}
+            onChange={setWorkspaceMode}
+            data-testid="mode-toggle"
+          />
           {/* File Explorer Toggle (only in Workspace mode) */}
           {workspaceMode === 'workspace' && (
             <button
@@ -843,14 +831,12 @@ export function TrainerSessionWorkspace({
             const currentFolder = currentFolderSlug
               ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
               : null
-            const childFolders = currentFolder
-              ? explorerFolders.filter(
-                  (f) => f.parentFolder && String(f.parentFolder.id) === String(currentFolder.id)
-                )
-              : explorerFolders.filter((f) => !f.parentFolder)
-            const childFiles = currentFolder
-              ? explorerFiles.filter((f) => f.folder && String(f.folder.id) === String(currentFolder.id))
-              : explorerFiles.filter((f) => !f.folder)
+            
+            const { childFolders, childFiles } = useFolderFileFilter({
+              folders: explorerFolders,
+              files: explorerFiles,
+              currentFolder,
+            })
 
             // Handler to refresh both explorer data and file explorer
             const handleItemChanged = async () => {
@@ -898,13 +884,24 @@ export function TrainerSessionWorkspace({
                     setCurrentFolderSlug(slug)
                   }
                 }}
-                onOpenFile={(fileId) => {
-                  handleFileSelect({
-                    id: fileId,
-                    name: '',
-                    content: '',
-                  })
-                  setWorkspaceMode('workspace')
+                onOpenFile={async (fileId) => {
+                  // Fetch file content and select it (consistent with student implementation)
+                  try {
+                    const fileRes = await fetch(`/api/files/${fileId}`, {
+                      credentials: 'include',
+                    })
+                    if (fileRes.ok) {
+                      const fileData = await fileRes.json()
+                      handleFileSelect({
+                        id: String(fileData.id),
+                        name: fileData.name,
+                        content: fileData.content || '',
+                      })
+                      setWorkspaceMode('workspace')
+                    }
+                  } catch (error) {
+                    console.error('Failed to load file:', error)
+                  }
                 }}
                 onOpenFolderInWorkspace={(slug) => {
                   setCurrentFolderSlug(slug)
@@ -918,18 +915,13 @@ export function TrainerSessionWorkspace({
         </div>
       ) : (
         /* Workspace Mode */
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left: File Explorer */}
-          {showFileExplorer && (
-            <div className="w-64 border-r bg-muted/30 overflow-hidden">
-              {switchingFile && (
-                <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-                  <div className="flex items-center gap-2 bg-card border rounded-md px-3 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-xs">Saving current file...</span>
-                  </div>
-                </div>
-              )}
+        <WorkspaceModeLayout
+          fileExplorer={
+            <FileExplorerSidebar
+              loadingOverlay={
+                <FileSwitchingOverlay visible={switchingFile} />
+              }
+            >
               <FileExplorer
                 key={refreshKey}
                 onFileSelect={handleFileSelect}
@@ -937,143 +929,122 @@ export function TrainerSessionWorkspace({
                 onFileSaved={handleFileSaved}
                 rootFolderSlug={currentFolderSlug || undefined}
               />
-            </div>
-          )}
-
-        {/* Center: Editor */}
-        <div
-          className={`flex flex-1 flex-col overflow-hidden ${
-            showAI
-              ? showFileExplorer && showOutput
-                ? 'max-w-[50%]'
-                : 'max-w-[65%]'
-              : ''
-          }`}
-        >
-          {selectedFile ? (
-            <>
-              {/* Editor Header with Active File Indicator */}
-              <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                    TRAINER
-                  </span>
-                  <span className="text-xs text-muted-foreground">Active:</span>
-                  <span className="text-xs font-medium text-primary flex items-center gap-1">
-                    <File className="h-3 w-3" />
-                    {activeFileName}
-                  </span>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
-                  >
-                    {SUPPORTED_LANGUAGES.map((lang) => (
-                      <option key={lang.id} value={lang.id}>
-                        {lang.name}
-                      </option>
-                    ))}
-                  </select>
+            </FileExplorerSidebar>
+          }
+          editor={
+            selectedFile ? (
+              <>
+                {/* Editor Header with Active File Indicator */}
+                <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      TRAINER
+                    </span>
+                    <span className="text-xs text-muted-foreground">Active:</span>
+                    <span className="text-xs font-medium text-primary flex items-center gap-1">
+                      <File className="h-3 w-3" />
+                      {activeFileName}
+                    </span>
+                    <select
+                      value={language}
+                      onChange={(e) => setLanguage(e.target.value)}
+                      className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {SUPPORTED_LANGUAGES.map((lang) => (
+                        <option key={lang.id} value={lang.id}>
+                          {lang.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveCode}
+                      disabled={savingCode}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                        saveSuccess 
+                          ? "bg-green-500/20 border-green-500 text-green-700 dark:text-green-400" 
+                          : "bg-background hover:bg-accent",
+                        savingCode && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      {savingCode ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Saving...
+                        </>
+                      ) : saveSuccess ? (
+                        <>
+                          <CheckCircle className="h-3 w-3" />
+                          Saved!
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-3 w-3" />
+                          Save & Sync
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setShowAI(!showAI)}
+                      className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      {showAI ? 'Hide AI' : 'AI Help'}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveCode}
-                    disabled={savingCode}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-                      saveSuccess 
-                        ? "bg-green-500/20 border-green-500 text-green-700 dark:text-green-400" 
-                        : "bg-background hover:bg-accent",
-                      savingCode && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    {savingCode ? (
-                      <>
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Saving...
-                      </>
-                    ) : saveSuccess ? (
-                      <>
-                        <CheckCircle className="h-3 w-3" />
-                        Saved!
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-3 w-3" />
-                        Save & Sync
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowAI(!showAI)}
-                    className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    {showAI ? 'Hide AI' : 'AI Help'}
-                  </button>
-                </div>
-              </div>
-              <WorkspaceEditor
-                fileId={selectedFile.id}
-                fileName={selectedFile.name}
-                code={code}
-                language={language}
-                onLanguageChange={setLanguage}
-                onChange={setCode}
-                onRun={handleRun}
-                executing={executing}
-                onSave={handleFileSaved}
-                hideSaveButton={true}
-                runDisabled={code !== lastSavedCode}
+                <WorkspaceEditor
+                  fileId={selectedFile.id}
+                  fileName={selectedFile.name}
+                  code={code}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  onChange={setCode}
+                  onRun={handleRun}
+                  executing={executing}
+                  onSave={handleFileSaved}
+                  hideSaveButton={true}
+                  runDisabled={code !== lastSavedCode}
+                />
+              </>
+            ) : (
+              <NoFileSelectedView
+                actionText="Select or Create File"
+                onAction={() => setShowFileModal(true)}
               />
-            </>
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center space-y-4">
-                <p className="text-muted-foreground">No file selected</p>
-                <button
-                  onClick={() => setShowFileModal(true)}
-                  className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  Select or Create File
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Output + AI */}
-        {showOutput && (
-          <div className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}>
-            <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
-              <div className="border-b bg-muted/30 px-3 py-1.5">
-                <h2 className="text-xs font-medium">Output</h2>
-              </div>
+            )
+          }
+          outputPanel={
+            <OutputPanelWrapper>
               <OutputPanel
                 result={executionResult}
                 executing={executing}
                 onClear={() => setExecutionResult(null)}
               />
-            </div>
-
-          </div>
-        )}
-
-        {/* AI Assistant Panel */}
-        {showAI && selectedFile && (
-          <div className="w-[35%] border-l bg-muted/30 p-2">
-            <AIAssistantPanel
-              role="trainer"
-              lectureId={sessionCode}
-              language={language}
-              code={code}
-              output={executionResult?.stdout || executionResult?.stderr}
-              onClose={() => setShowAI(false)}
-              onInsertCode={(newCode) => setCode(newCode)}
-            />
-          </div>
-        )}
-        </div>
+            </OutputPanelWrapper>
+          }
+          aiPanel={
+            selectedFile ? (
+              <AIAssistantPanelWrapper>
+                <AIAssistantPanel
+                  role="trainer"
+                  lectureId={sessionCode}
+                  language={language}
+                  code={code}
+                  output={executionResult?.stdout || executionResult?.stderr}
+                  onClose={() => setShowAI(false)}
+                  onInsertCode={(newCode) => setCode(newCode)}
+                />
+              </AIAssistantPanelWrapper>
+            ) : null
+          }
+          showFileExplorer={showFileExplorer}
+          showOutput={showOutput}
+          showAI={showAI && !!selectedFile}
+          data-testid="workspace-layout"
+        />
       )}
 
       {/* File Selection Modal */}

@@ -1,0 +1,251 @@
+import { getPayload } from 'payload'
+import config from '../src/payload.config'
+import dotenv from 'dotenv'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+// Get directory name for ES modules
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Load environment variables from .env file in project root
+// Try multiple locations
+const envPaths = [
+  path.resolve(__dirname, '../.env'),
+  path.resolve(process.cwd(), '.env'),
+]
+
+let envLoaded = false
+for (const envPath of envPaths) {
+  const result = dotenv.config({ path: envPath })
+  if (!result.error) {
+    envLoaded = true
+    break
+  }
+}
+
+if (!envLoaded) {
+  console.warn('⚠️  Warning: Could not load .env file. Using environment variables from system.')
+}
+
+/**
+ * Seed test users with demo files and folders for testing
+ */
+async function seedTestUsers() {
+  // Check for required environment variables
+  if (!process.env.PAYLOAD_SECRET) {
+    console.error('❌ Error: PAYLOAD_SECRET environment variable is required')
+    console.error('   Please ensure your .env file contains PAYLOAD_SECRET')
+    console.error('   Example: PAYLOAD_SECRET=your-secret-key-here')
+    process.exit(1)
+  }
+
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL environment variable is required')
+    console.error('   Please ensure your .env file contains DATABASE_URL')
+    process.exit(1)
+  }
+
+  console.log('🔧 Seeding test users with demo data...')
+  
+  const payload = await getPayload({ config })
+
+  try {
+    // Test user credentials
+    const testUsers = [
+      {
+        email: 'admin@codehub.com',
+        password: 'Admin@123',
+        name: 'Admin User',
+        role: 'admin' as const,
+      },
+      {
+        email: 'trainer@test.com',
+        password: 'Trainer@123',
+        name: 'Test Trainer',
+        role: 'trainer' as const,
+      },
+      {
+        email: 'student@test.com',
+        password: 'Student@123',
+        name: 'Test Student',
+        role: 'student' as const,
+      },
+      {
+        email: 'manager@test.com',
+        password: 'Manager@123',
+        name: 'Test Manager',
+        role: 'manager' as const,
+      },
+    ]
+
+    // Create or update users
+    for (const userData of testUsers) {
+      const existing = await payload.find({
+        collection: 'users',
+        where: {
+          email: {
+            equals: userData.email,
+          },
+        },
+        limit: 1,
+      })
+
+      if (existing.docs.length > 0) {
+        console.log(`⚠️  User ${userData.email} already exists, skipping...`)
+        continue
+      }
+
+      const user = await payload.create({
+        collection: 'users',
+        data: {
+          ...userData,
+        } as any,
+      })
+
+      console.log(`✅ Created user: ${userData.email} (${userData.role})`)
+
+      // Create demo folders and files for trainer and student
+      if (userData.role === 'trainer' || userData.role === 'student') {
+        // Create a demo folder
+        const folder = await payload.create({
+          collection: 'folders',
+          data: {
+            name: `Demo Folder - ${userData.name}`,
+            user: user.id,
+          },
+        })
+
+        console.log(`  📁 Created folder: ${folder.name}`)
+
+        // Create demo files
+        const demoFiles = [
+          {
+            name: 'demo.js',
+            content: 'console.log("Hello from demo.js");\nconst x = 10;\nconsole.log(x);',
+          },
+          {
+            name: 'test.js',
+            content: 'function test() {\n  return "test";\n}\nconsole.log(test());',
+          },
+          {
+            name: 'example.js',
+            content: '// Example file\nconst example = () => {\n  console.log("Example");\n};\nexample();',
+          },
+        ]
+
+        for (const fileData of demoFiles) {
+          const file = await payload.create({
+            collection: 'files',
+            data: {
+              name: fileData.name,
+              content: fileData.content,
+              user: user.id,
+              folder: folder.id,
+            },
+          })
+          console.log(`  📄 Created file: ${file.name}`)
+        }
+
+        // Create a root-level file
+        const rootFile = await payload.create({
+          collection: 'files',
+          data: {
+            name: 'root-file.js',
+            content: '// Root level file\nconsole.log("Root file");',
+            user: user.id,
+            // No folder = root level
+          },
+        })
+        console.log(`  📄 Created root file: ${rootFile.name}`)
+      }
+    }
+
+    // Create a demo live session for trainer
+    const trainer = await payload.find({
+      collection: 'users',
+      where: {
+        email: { equals: 'trainer@test.com' },
+      },
+      limit: 1,
+    })
+
+    if (trainer.docs.length > 0) {
+      // Check if demo session exists
+      const existingSession = await payload.find({
+        collection: 'live-sessions',
+        where: {
+          joinCode: { equals: 'VXF-MG7-C4H' },
+        },
+        limit: 1,
+      })
+
+      if (existingSession.docs.length === 0) {
+        // Get or create default JavaScript language
+        let languageId = null
+        const languages = await payload.find({
+          collection: 'languages',
+          where: {
+            slug: { equals: 'javascript' },
+          },
+          limit: 1,
+        })
+
+        if (languages.docs.length > 0) {
+          languageId = languages.docs[0].id
+        } else {
+          // Create default JavaScript language if it doesn't exist
+          try {
+            const jsLanguage = await payload.create({
+              collection: 'languages',
+              data: {
+                name: 'JavaScript',
+                slug: 'javascript',
+                monacoLanguage: 'javascript',
+                extension: '.js',
+                defaultCode: 'console.log("Hello, World!");',
+              },
+            })
+            languageId = jsLanguage.id
+            console.log(`  📝 Created default JavaScript language`)
+          } catch (error) {
+            console.log(`  ⚠️  Could not create language (may need trainer role): ${error}`)
+            // Language is optional, continue without it
+          }
+        }
+
+        const session = await payload.create({
+          collection: 'live-sessions',
+          data: {
+            title: 'Demo Test Session',
+            joinCode: 'VXF-MG7-C4H',
+            trainer: trainer.docs[0].id,
+            language: languageId,
+            isActive: true,
+            trainerCode: 'console.log("Trainer code");',
+            trainerLanguage: 'javascript',
+          } as any,
+        })
+
+        console.log(`✅ Created demo session: ${session.joinCode}`)
+      } else {
+        console.log(`⚠️  Demo session VXF-MG7-C4H already exists`)
+      }
+    }
+
+    console.log('\n✅ Test users seeded successfully!')
+    console.log('\nTest Credentials:')
+    testUsers.forEach((user) => {
+      console.log(`  ${user.role}: ${user.email} / ${user.password}`)
+    })
+    
+  } catch (error) {
+    console.error('❌ Error seeding test users:', error)
+    process.exit(1)
+  }
+
+  process.exit(0)
+}
+
+seedTestUsers()
+
