@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { Folder as FolderIcon, File as FileIcon, ArrowLeft, LayoutTemplate, MoreVertical, Edit2, FolderOpen, Trash2 } from 'lucide-react'
+import { Folder as FolderIcon, File as FileIcon, ArrowLeft, LayoutTemplate, MoreVertical, Edit2, FolderOpen, Trash2, FolderPlus, FilePlus } from 'lucide-react'
 
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import { RenameItemModal } from './RenameItemModal'
 import { MoveItemModal } from './MoveItemModal'
+import { CreateFolderModal } from './CreateFolderModal'
+import { CreateFileModal } from './CreateFileModal'
 
 type Folder = BasicFolderRef & {
   parentFolder?: BasicFolderRef | null
@@ -74,6 +76,8 @@ export function FolderExplorerView({
   const [showRenameModal, setShowRenameModal] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)
   const [showMoveModal, setShowMoveModal] = useState<{ type: 'file' | 'folder'; id: string; currentParentId: string | number | null } | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)
+  const [showCreateFolder, setShowCreateFolder] = useState(false)
+  const [showCreateFile, setShowCreateFile] = useState(false)
 
   // Helper to handle folder opening
   const handleOpenFolder = (folder: Folder) => {
@@ -269,6 +273,28 @@ export function FolderExplorerView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!readOnly && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowCreateFolder(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                title="Create new folder"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                New Folder
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateFile(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+                title="Create new file"
+              >
+                <FilePlus className="h-3.5 w-3.5" />
+                New File
+              </button>
+            </>
+          )}
           {isRoot && onOpenFullWorkspace ? (
             <button
               type="button"
@@ -432,6 +458,36 @@ export function FolderExplorerView({
           onClose={() => setShowMoveModal(null)}
           onSuccess={() => {
             setShowMoveModal(null)
+            if (onItemChanged) onItemChanged()
+          }}
+        />
+      )}
+      {showCreateFolder && (
+        <CreateFolderModal
+          folders={allFolders.filter(f => f.name).map(f => ({ 
+            id: String(f.id), 
+            name: f.name!, 
+            parentFolder: f.parentFolder ? { id: String(f.parentFolder.id), name: f.parentFolder.name || undefined } : undefined 
+          }))}
+          currentFolderId={currentFolder?.id || null}
+          onClose={() => setShowCreateFolder(false)}
+          onSuccess={() => {
+            setShowCreateFolder(false)
+            if (onItemChanged) onItemChanged()
+          }}
+        />
+      )}
+      {showCreateFile && (
+        <CreateFileModal
+          folders={allFolders.filter(f => f.name).map(f => ({ 
+            id: String(f.id), 
+            name: f.name!, 
+            parentFolder: f.parentFolder ? { id: String(f.parentFolder.id), name: f.parentFolder.name || undefined } : undefined 
+          }))}
+          currentFolderId={currentFolder?.id || null}
+          onClose={() => setShowCreateFile(false)}
+          onSuccess={() => {
+            setShowCreateFile(false)
             if (onItemChanged) onItemChanged()
           }}
         />

@@ -18,3 +18,4 @@ export default async function FolderExplorerPage({ params }: PageProps) {
   return <FolderExplorerPageClient slug={slug} />
 }
 
+
