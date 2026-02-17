@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Folder, File as FileIcon, ChevronRight, ChevronDown, X, MoreVertical, Edit2, FolderOpen, Trash2 } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { RenameItemModal } from './RenameItemModal'
@@ -64,6 +64,10 @@ export function FileTreeItem({
   const [showMenu, setShowMenu] = useState(false)
   const [showRenameModal, setShowRenameModal] = useState(false)
   const [showMoveModal, setShowMoveModal] = useState(false)
+  const fileMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const folderMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const [fileMenuPosition, setFileMenuPosition] = useState<{ top: number; right: number } | null>(null)
+  const [folderMenuPosition, setFolderMenuPosition] = useState<{ top: number; right: number } | null>(null)
 
   const handleFileDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -102,6 +106,32 @@ export function FileTreeItem({
     setShowMoveModal(false)
   }
 
+  // Calculate file menu position when it opens
+  useEffect(() => {
+    if (file && showMenu && fileMenuButtonRef.current) {
+      const rect = fileMenuButtonRef.current.getBoundingClientRect()
+      setFileMenuPosition({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    } else {
+      setFileMenuPosition(null)
+    }
+  }, [showMenu, file])
+
+  // Calculate folder menu position when it opens
+  useEffect(() => {
+    if (folder && showMenu && folderMenuButtonRef.current) {
+      const rect = folderMenuButtonRef.current.getBoundingClientRect()
+      setFolderMenuPosition({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      })
+    } else {
+      setFolderMenuPosition(null)
+    }
+  }, [showMenu, folder])
+
   if (file) {
     const isSelected = selectedFileId === file.id
 
@@ -125,6 +155,7 @@ export function FileTreeItem({
         {!readOnly && (onFileDelete || onFileRename || onFileMove) && isHovered && (
           <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
             <button
+              ref={fileMenuButtonRef}
               onClick={(e) => {
                 e.stopPropagation()
                 setShowMenu(!showMenu)
@@ -134,13 +165,19 @@ export function FileTreeItem({
             >
               <MoreVertical className="h-3 w-3" />
             </button>
-            {showMenu && (
+            {showMenu && fileMenuPosition && (
               <>
                 <div
                   className="fixed inset-0 z-10"
                   onClick={() => setShowMenu(false)}
                 />
-                <div className="absolute right-0 top-6 z-20 w-40 rounded-md border bg-card shadow-lg">
+                <div 
+                  className="fixed z-20 w-40 rounded-md border bg-card shadow-lg"
+                  style={{
+                    top: `${fileMenuPosition.top}px`,
+                    right: `${fileMenuPosition.right}px`,
+                  }}
+                >
                   {onFileRename && (
                     <button
                       onClick={handleRename}
@@ -227,6 +264,7 @@ export function FileTreeItem({
           {!readOnly && (onFolderDelete || onFolderRename || onFolderMove) && isHovered && (
             <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
               <button
+                ref={folderMenuButtonRef}
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowMenu(!showMenu)
@@ -236,13 +274,19 @@ export function FileTreeItem({
               >
                 <MoreVertical className="h-3 w-3" />
               </button>
-              {showMenu && (
+              {showMenu && folderMenuPosition && (
                 <>
                   <div
                     className="fixed inset-0 z-10"
                     onClick={() => setShowMenu(false)}
                   />
-                  <div className="absolute right-0 top-6 z-20 w-40 rounded-md border bg-card shadow-lg">
+                  <div 
+                    className="fixed z-20 w-40 rounded-md border bg-card shadow-lg"
+                    style={{
+                      top: `${folderMenuPosition.top}px`,
+                      right: `${folderMenuPosition.right}px`,
+                    }}
+                  >
                     {onFolderRename && (
                       <button
                         onClick={handleRename}

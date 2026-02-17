@@ -16,7 +16,7 @@ export function AuthErrorHandler() {
   useEffect(() => {
     // Intercept fetch responses globally
     const originalFetch = window.fetch
-    const publicPaths = ['/', '/signup', '/admin/login', '/admin']
+    const publicPaths = ['/', '/signup', '/admin/login', '/admin', '/join', '/trainer/start']
 
     window.fetch = async (...args) => {
       const response = await originalFetch(...args)
@@ -43,8 +43,11 @@ export function AuthErrorHandler() {
               try {
                 const data = await response.clone().json() as AuthErrorResponse
                 
-                // Check if response indicates auth expired
-                if (data.authExpired || data.code === 'AUTH_EXPIRED' || response.status === 401) {
+                // Only redirect on 401 (auth expired), not on 403 (forbidden)
+                // 403 means user is authenticated but doesn't have permission (expected for some endpoints)
+                const isAuthExpired = data.authExpired || data.code === 'AUTH_EXPIRED' || response.status === 401
+                
+                if (isAuthExpired) {
                   // Don't redirect if already on home page or public pages
                   // Use the current page pathname from usePathname hook
                   if (!publicPaths.includes(pathname)) {
@@ -55,9 +58,11 @@ export function AuthErrorHandler() {
                     router.refresh()
                   }
                 }
+                // 403 errors are silently ignored - they're expected for endpoints like /api/sessions/list
               } catch (e) {
                 // If response is not JSON, still check status code
                 // Use the current page pathname from usePathname hook
+                // Only redirect on 401, not 403
                 if (response.status === 401 && !publicPaths.includes(pathname)) {
                   console.log('[AuthErrorHandler] 401 error detected, redirecting to home')
                   document.cookie = 'payload-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'

@@ -116,6 +116,7 @@ export function SessionWorkspaceLayout({
             onFileSelect={handleFileSelect}
             selectedFileId={selectedFile?.id}
             onFileSaved={handleFileSaved}
+            readOnly={false}
           />
         </div>
 

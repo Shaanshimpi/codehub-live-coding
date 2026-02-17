@@ -25,6 +25,7 @@ import { OutputPanelWrapper } from '@/components/Workspace/OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
 import { FileSwitchingOverlay } from '@/components/Workspace/FileSwitchingOverlay'
 import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
+import { SessionMetadataModal } from '@/components/Session/SessionMetadataModal'
 
 type WorkspaceFile = {
   id: string
@@ -92,6 +93,7 @@ export function TrainerSessionWorkspace({
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [switchingFile, setSwitchingFile] = useState(false)
   const [lastSavedCode, setLastSavedCode] = useState<string>('') // Track last saved code to enable/disable Run button
+  const [showMetadataModal, setShowMetadataModal] = useState(false)
   
   // Local student code edits (not synced with students)
   const [localStudentEdits, setLocalStudentEdits] = useState<Record<string, {
@@ -579,14 +581,33 @@ export function TrainerSessionWorkspace({
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
       {/* Session Header */}
-      <header className="flex items-center justify-between border-b bg-card px-4 py-2">
-        <div className="flex items-center gap-3">
-          <Radio className="h-4 w-4 text-red-500" />
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{sessionTitle}</span>
-            <span className="text-[10px] text-muted-foreground">Join code: {sessionCode}</span>
+      <header className="flex items-center justify-between border-b bg-card px-4 py-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Radio className="h-5 w-5 text-red-500 flex-shrink-0" />
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            {/* First row: Large title and join code */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => setShowMetadataModal(true)}
+                className="text-left text-lg font-semibold hover:text-primary transition-colors cursor-pointer truncate"
+                title="Click to view session details"
+              >
+                {sessionTitle}
+              </button>
+              <button
+                onClick={() => setShowMetadataModal(true)}
+                className="text-left text-base font-mono font-semibold text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                title="Click to view session details"
+              >
+                {sessionCode}
+              </button>
+            </div>
+            {/* Second row: Smaller details */}
             {activeFileName && (
-              <span className="text-xs text-primary font-medium">Active: {activeFileName}</span>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="text-primary font-medium">Active:</span>
+                <span className="truncate">{activeFileName}</span>
+              </div>
             )}
           </div>
         </div>
@@ -922,6 +943,7 @@ export function TrainerSessionWorkspace({
               loadingOverlay={
                 <FileSwitchingOverlay visible={switchingFile} />
               }
+              overlayVisible={switchingFile}
             >
               <FileExplorer
                 key={refreshKey}
@@ -929,6 +951,7 @@ export function TrainerSessionWorkspace({
                 selectedFileId={activeFileId || undefined}
                 onFileSaved={handleFileSaved}
                 rootFolderSlug={currentFolderSlug || undefined}
+                readOnly={false}
               />
             </FileExplorerSidebar>
           }
@@ -1064,6 +1087,13 @@ export function TrainerSessionWorkspace({
           }
           setShowFileModal(false)
         }}
+      />
+
+      {/* Session Metadata Modal */}
+      <SessionMetadataModal
+        sessionCode={sessionCode}
+        isOpen={showMetadataModal}
+        onClose={() => setShowMetadataModal(false)}
       />
     </div>
   )

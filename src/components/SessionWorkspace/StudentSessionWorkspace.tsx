@@ -946,6 +946,7 @@ export function StudentSessionWorkspace({
                   loadingOverlay={
                     <FileSwitchingOverlay visible={switchingFile} />
                   }
+                  overlayVisible={switchingFile}
                 >
                   <FileExplorer
                     key={refreshKey}
@@ -953,6 +954,7 @@ export function StudentSessionWorkspace({
                     selectedFileId={activeFileId || undefined}
                     onFileSaved={handleFileSaved}
                     rootFolderSlug={currentFolderSlug || undefined}
+                    readOnly={false}
                   />
                 </FileExplorerSidebar>
               }

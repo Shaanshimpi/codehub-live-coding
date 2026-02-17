@@ -4,6 +4,7 @@ import config from '@payload-config'
 import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
 import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
+import { isSessionExpired } from '@/utilities/sessionExpiration'
 
 /**
  * GET /api/sessions/[code]/live
@@ -45,6 +46,31 @@ export async function GET(
     }
 
     const session = sessions.docs[0]
+
+    // Check if session has expired (older than 24 hours)
+    if (session.isActive && isSessionExpired(session.startedAt, session.createdAt)) {
+      // Auto-deactivate expired session
+      await payload.update({
+        collection: 'live-sessions',
+        id: session.id,
+        data: {
+          isActive: false,
+          endedAt: new Date().toISOString(),
+        },
+      })
+      
+      // Return inactive session
+      return NextResponse.json({
+        code: session.currentCode || '',
+        output: session.currentOutput || null,
+        isActive: false,
+        title: session.title,
+        language: null,
+        participantCount: 0,
+        trainerWorkspaceFileId: session.trainerWorkspaceFileId || null,
+        trainerWorkspaceFileName: session.trainerWorkspaceFileName || null,
+      })
+    }
 
     // Determine language slug - prioritize from trainer's file name, then from session language
     let languageSlug: string | null = null

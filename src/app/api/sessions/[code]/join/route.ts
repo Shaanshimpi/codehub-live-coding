@@ -5,6 +5,7 @@ import { isValidJoinCode } from '@/utilities/joinCode'
 import { getMeUser } from '@/auth/getMeUser'
 import { checkStudentPaymentStatus } from '@/utilities/paymentGuard'
 import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
+import { isSessionExpired } from '@/utilities/sessionExpiration'
 
 /**
  * POST /api/sessions/[code]/join
@@ -76,6 +77,24 @@ export async function POST(
     }
 
     const session = sessions.docs[0]
+
+    // Check if session has expired (older than 24 hours)
+    if (isSessionExpired(session.startedAt, session.createdAt)) {
+      // Auto-deactivate expired session
+      await payload.update({
+        collection: 'live-sessions',
+        id: session.id,
+        data: {
+          isActive: false,
+          endedAt: new Date().toISOString(),
+        },
+      })
+
+      return NextResponse.json(
+        { error: 'Session has expired (older than 24 hours)' },
+        { status: 410 } // 410 Gone - resource is no longer available
+      )
+    }
 
     // Get or initialize student scratchpads
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}

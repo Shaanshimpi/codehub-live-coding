@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Radio, Play } from 'lucide-react'
+import { ActiveSessionsList } from '@/components/Session/ActiveSessionsList'
 
 interface Language {
   id: string
@@ -99,8 +100,12 @@ export function TrainerStartClient() {
     }
   }
 
+  const handleSessionSelect = (joinCode: string) => {
+    router.push(`/trainer/session/${joinCode}`)
+  }
+
   return (
-    <div className="container mx-auto max-w-xl py-12 px-4">
+    <div className="container mx-auto max-w-6xl py-12 px-4">
       <div className="mb-6">
         <h1 className="text-3xl font-semibold flex items-center gap-2">
           <Radio className="h-7 w-7 text-primary" />
@@ -111,70 +116,87 @@ export function TrainerStartClient() {
         </p>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-4 rounded-lg border bg-card p-6 shadow-sm"
-      >
+      <div className="grid md:grid-cols-2 gap-8">
+        {/* Start New Session Form */}
         <div>
-          <label className="text-sm font-medium">Session Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., Python Loops – Day 1"
-            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            disabled={loading || submitting}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4 rounded-lg border bg-card p-6 shadow-sm"
+          >
+            <div>
+              <label className="text-sm font-medium">Session Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g., Python Loops – Day 1"
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={loading || submitting}
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Language</label>
+              <select
+                value={languageId}
+                onChange={(e) => setLanguageId(e.target.value)}
+                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={loading || submitting || languages.length === 0}
+              >
+                {languages.map((lang) => (
+                  <option key={lang.id} value={lang.id}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+              {languages.length === 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  No languages found. Add some in the admin under <strong>Languages</strong>.
+                </p>
+              )}
+            </div>
+
+            {error && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || submitting || !title.trim() || !me?.id}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? (
+                'Starting....'
+              ) : (
+                <>
+                  <Play className="h-4 w-4" />
+                  Start Session
+                </>
+              )}
+            </button>
+
+            {me && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Logged in as <span className="font-mono">{me.email}</span>
+              </p>
+            )}
+          </form>
+        </div>
+
+        {/* Active Sessions List */}
+        <div>
+          <ActiveSessionsList
+            onSessionSelect={handleSessionSelect}
+            actionLabel="Open"
+            actionIcon={<Play className="h-4 w-4" />}
+            trainerId={me?.id} // Filter to show only this trainer's sessions
+            emptyMessage="No active sessions found."
+            emptySubMessage="Sessions will appear here once you start them."
           />
         </div>
-
-        <div>
-          <label className="text-sm font-medium">Language</label>
-          <select
-            value={languageId}
-            onChange={(e) => setLanguageId(e.target.value)}
-            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            disabled={loading || submitting || languages.length === 0}
-          >
-            {languages.map((lang) => (
-              <option key={lang.id} value={lang.id}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
-          {languages.length === 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              No languages found. Add some in the admin under <strong>Languages</strong>.
-            </p>
-          )}
-        </div>
-
-        {error && (
-          <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading || submitting || !title.trim() || !me?.id}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {submitting ? (
-            'Starting....'
-          ) : (
-            <>
-              <Play className="h-4 w-4" />
-              Start Session
-            </>
-          )}
-        </button>
-
-        {me && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Logged in as <span className="font-mono">{me.email}</span>
-          </p>
-        )}
-      </form>
+      </div>
     </div>
   )
 }
