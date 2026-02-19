@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { X, File, FilePlus, Loader2 } from 'lucide-react'
 import type { WorkspaceFileFull } from '@/types/workspace'
 
-interface WorkspaceFile extends WorkspaceFileFull {
+interface WorkspaceFile extends Omit<WorkspaceFileFull, 'language'> {
   language: string
   updatedAt: string
   folderPath?: string
@@ -113,7 +113,8 @@ export function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionM
       if (file) {
         // Don't call onClose() here - let the parent component close the modal
         // after it finishes processing the selection (which is async)
-        onSelect(file.id, file.name, file.content, file.language)
+        const language = file.language ?? 'text'
+        onSelect(file.id, file.name, file.content ?? '', language)
       }
     } else if (showCreateFile && newFileName.trim()) {
       // Create new file - create it first, then select it

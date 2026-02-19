@@ -74,7 +74,6 @@ export function validateAndFormatResponse(
       },
       mode: 'explanation',
       summary: aiResponseText,
-      fallback: true,
     },
     fallback: true,
   }
