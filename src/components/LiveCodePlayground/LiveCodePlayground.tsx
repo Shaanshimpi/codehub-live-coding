@@ -5,6 +5,7 @@ import Editor, { useMonaco } from '@monaco-editor/react'
 import { Play, Square, ChevronDown, ChevronUp, Sparkles, ZoomIn, ZoomOut } from 'lucide-react'
 import { LiveCodePlaygroundProps, SUPPORTED_LANGUAGES } from './types'
 import { useTheme } from '@/providers/Theme'
+import { parseErrorLocation } from '@/utilities/aiAssistant'
 
 export function LiveCodePlayground({
   language,
@@ -28,6 +29,7 @@ export function LiveCodePlayground({
   const [fontSize, setFontSize] = useState<number>(14)
   const monaco = useMonaco()
   const { theme: appTheme } = useTheme()
+
   
   // Determine Monaco theme based on app theme or prop
   const monacoTheme = themeProp || (appTheme === 'dark' ? 'vs-dark' : 'vs')
@@ -128,6 +130,79 @@ export function LiveCodePlayground({
   const handleZoomOut = useCallback(() => {
     setFontSize((prev) => Math.max(10, prev - 1))
   }, [])
+
+  // Phase 4: Highlight syntax errors in Monaco using local parsing (no AI)
+  useEffect(() => {
+    if (!monaco || !editorRef.current) {
+      return
+    }
+
+    const editor = editorRef.current
+    const model = editor.getModel?.() || (editor as any).getModel()
+    
+    if (!model) {
+      return
+    }
+
+    // Clear markers when there is no result or success
+    if (!executionResult || executionResult.status === 'success') {
+      monaco.editor.setModelMarkers(model, 'syntax-error', [])
+      return
+    }
+
+    // Focus on compilation errors for syntax highlighting
+    if (executionResult.status !== 'compilation_error') {
+      monaco.editor.setModelMarkers(model, 'syntax-error', [])
+      return
+    }
+
+    const rawOutput = executionResult.stderr || executionResult.stdout || ''
+    if (!rawOutput.trim()) {
+      monaco.editor.setModelMarkers(model, 'syntax-error', [])
+      return
+    }
+
+    const parsed = parseErrorLocation(rawOutput, language)
+
+    if (!parsed || !parsed.line) {
+      monaco.editor.setModelMarkers(model, 'syntax-error', [])
+      return
+    }
+
+    const line = parsed.line > 0 ? parsed.line : 1
+    const column = parsed.column && parsed.column > 0 ? parsed.column : 1
+    const message = parsed.message || executionResult.stderr || 'Compilation error'
+
+    // Verify line exists in model
+    const lineCount = model.getLineCount?.() || 0
+    if (line > lineCount) {
+      return
+    }
+
+    const lineText = model.getLineContent?.(line) || ''
+    const severity = monaco.MarkerSeverity?.Error ?? 8
+    const startCol = Math.max(1, column)
+    const endCol = Math.min(Math.max(column + 5, column + 1), lineText.length + 1)
+
+    const markers = [
+      {
+        startLineNumber: line,
+        startColumn: startCol,
+        endLineNumber: line,
+        endColumn: endCol,
+        message: message,
+        severity: severity,
+        source: 'syntax-error',
+      },
+    ]
+
+    try {
+      monaco.editor.setModelMarkers(model, 'syntax-error', markers)
+      editor.revealLineInCenter?.(line)
+    } catch (error) {
+      console.error('[MonacoMarkers] Error setting markers:', error)
+    }
+  }, [executionResult, language, monaco])
 
   // Update Monaco theme when app theme changes
   useEffect(() => {

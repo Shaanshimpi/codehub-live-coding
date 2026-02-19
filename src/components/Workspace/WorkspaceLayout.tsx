@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sparkles, Radio, Folder, Terminal, Download, Upload, ArrowLeft, FolderOpen, LayoutTemplate, File as FileIcon } from 'lucide-react'
+import { Radio, Download, Upload } from 'lucide-react'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
-import { executeCode, type ExecutionResult } from '@/services/codeExecution'
-import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
 import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
+import { inferLanguageFromFileName } from '@/utilities/languageInference'
+import { WorkspaceViewControls } from './WorkspaceViewControls'
 import { PaymentDueModal } from '@/components/Payment/PaymentDueModal'
 import { PaymentGracePeriodModal } from '@/components/Payment/PaymentGracePeriodModal'
 import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
@@ -25,30 +25,28 @@ import { NoFileSelectedView } from './NoFileSelectedView'
 import { FileExplorerSidebar } from './FileExplorerSidebar'
 import { OutputPanelWrapper } from './OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from './AIAssistantPanelWrapper'
-import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
+import { useExplorerData } from '@/hooks/workspace/useExplorerData'
+import { useFolderExplorerHandlers } from '@/hooks/workspace/useFolderExplorerHandlers'
+import { useFileSelection } from '@/hooks/workspace/useFileSelection'
+import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
+import { useWorkspaceImportExport } from '@/hooks/workspace/useWorkspaceImportExport'
+import type { WorkspaceFileWithContent } from '@/types/workspace'
 
-type WorkspaceFile = {
-  id: string
-  name: string
-  content: string
-}
+type WorkspaceFile = WorkspaceFileWithContent
 
 interface WorkspaceLayoutProps {
   userId?: string | number
   readOnly?: boolean
   /**
-   * Optional folder slug that defines the root of the visible workspace subtree.
+   * Optional folder ID that defines the root of the visible workspace subtree.
    * When provided, only this folder and its descendants are shown in the tree.
    */
-  scopeFolderSlug?: string
+  scopeFolderId?: string | number
 }
 
-export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: WorkspaceLayoutProps = {}) {
-  const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
+export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: WorkspaceLayoutProps = {}) {
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
-  const [executing, setExecuting] = useState(false)
-  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [showAI, setShowAI] = useState(false)
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
@@ -58,157 +56,116 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
   const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
   const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
   const [showTrialGraceModal, setShowTrialGraceModal] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadMessage, setUploadMessage] = useState('')
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
   const [scopedFolder, setScopedFolder] = useState<(BasicFolderRef & { slug?: string | null }) | null>(null)
   const [scopedFolderLoading, setScopedFolderLoading] = useState(false)
   // Default to Explorer mode for root workspace, Workspace mode for scoped folders
-  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>(scopeFolderSlug ? 'workspace' : 'explorer')
-  const [explorerFolders, setExplorerFolders] = useState<Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>>([])
-  const [explorerFiles, setExplorerFiles] = useState<Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>>([])
-  const [explorerLoading, setExplorerLoading] = useState(false)
-  const [explorerError, setExplorerError] = useState<string | null>(null)
-  const [currentFolderSlug, setCurrentFolderSlug] = useState<string | null>(scopeFolderSlug || null)
+  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>(scopeFolderId ? 'workspace' : 'explorer')
+  const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(scopeFolderId || null)
 
-  // Update code (and infer language from extension) when file changes
+  // File selection management (no autosave needed in standalone workspace)
+  const {
+    selectedFile,
+    setSelectedFile: setHookSelectedFile,
+    handleFileSelect: handleFileSelectFromExplorer,
+    handleFileSelectFromModal,
+    switchingFile,
+    refreshKey: hookRefreshKey,
+    setRefreshKey: setHookRefreshKey,
+  } = useFileSelection({
+    onFileChanged: (file) => {
+      const inferredLanguage = inferLanguageFromFileName(file.name, language || 'javascript')
+      setLanguage(inferredLanguage)
+      console.log('[WorkspaceLayout] File changed via hook', {
+        fileName: file.name,
+        inferredLanguage,
+        fileId: file.id
+      })
+    },
+    autoSaveBeforeSwitch: false,
+  })
+
+  // Keep local refreshKey in sync with hook refreshKey for existing consumers
   useEffect(() => {
-    if (selectedFile) {
-      setCode(selectedFile.content || '')
-      const parts = selectedFile.name.split('.')
-      const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-      if (ext) {
-        const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-        if (byExt) {
-          setLanguage(byExt.id)
-          return
-        }
-      }
-      // fallback
-      setLanguage((prev) => prev || 'javascript')
+    if (refreshKey !== hookRefreshKey) {
+      setRefreshKey(() => hookRefreshKey)
     }
-  }, [selectedFile])
+  }, [hookRefreshKey, refreshKey])
 
-  const handleRun = async (currentCode: string, input?: string) => {
-    setExecuting(true)
-    setExecutionResult(null)
+  // Code execution (no session sync for standalone workspace)
+  const {
+    executing,
+    executionResult,
+    handleRun,
+    clearResult,
+  } = useWorkspaceCodeExecution({
+    language,
+    syncToSession: false,
+  })
 
-    try {
-      const result = await executeCode(language, currentCode, input)
-      setExecutionResult(result)
-    } catch (error) {
-      console.error('Execution error:', error)
-      setExecutionResult({
-        stdout: '',
-        stderr: error instanceof Error ? error.message : 'Unknown error occurred',
-        status: 'error',
-        exitCode: 1,
-      })
-    } finally {
-      setExecuting(false)
-    }
-  }
-
-  const handleFileSelect = (file: WorkspaceFile) => {
-    setSelectedFile(file)
-  }
-
-  const handleFileSaved = () => {
-    // Refresh file explorer to show updated file
-    setRefreshKey((prev) => prev + 1)
-  }
-
-  const handleDownload = async () => {
-    try {
-      setDownloading(true)
-      const res = await fetch('/api/workspace/download', {
-        credentials: 'include',
-      })
-      
-      if (!res.ok) {
-        throw new Error('Failed to download workspace')
-      }
-      
-      const blob = await res.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `workspace-${Date.now()}.zip`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (error) {
-      alert('Failed to download workspace')
-      console.error(error)
-    } finally {
-      setDownloading(false)
-    }
-  }
-
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    if (!file.name.endsWith('.zip')) {
-      alert('Please upload a ZIP file')
-      return
-    }
-
-    try {
-      setUploading(true)
-      setUploadProgress(0)
-      setUploadMessage('Preparing upload...')
-      
-      const formData = new FormData()
-      formData.append('file', file)
-
-      setUploadProgress(20)
-      setUploadMessage('Uploading ZIP file...')
-
-      const res = await fetch('/api/workspace/upload', {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      })
-
-      setUploadProgress(60)
-      setUploadMessage('Processing files...')
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.error || 'Failed to upload workspace')
-      }
-
-      setUploadProgress(80)
-      setUploadMessage('Finalizing...')
-
-      const data = await res.json()
-      
-      setUploadProgress(100)
-      setUploadMessage(`Success! ${data.filesCreated} files processed, ${data.foldersCreated} folders created.`)
-      
-      // Wait a moment to show success message
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+  // Import/Export functionality
+  const {
+    downloading,
+    uploading,
+    uploadProgress,
+    uploadMessage,
+    handleDownload,
+    handleUpload,
+  } = useWorkspaceImportExport({
+    onUploadSuccess: () => {
       // Refresh workspace
       setRefreshKey((prev) => prev + 1)
       // Reload files
       window.location.reload()
-    } catch (error) {
-      setUploadMessage(error instanceof Error ? error.message : 'Failed to upload workspace')
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      alert(error instanceof Error ? error.message : 'Failed to upload workspace')
-    } finally {
-      setUploading(false)
-      setUploadProgress(0)
-      setUploadMessage('')
-      // Reset input
-      event.target.value = ''
+    },
+  })
+
+  // Explorer data management
+  const {
+    explorerFolders,
+    explorerFiles,
+    explorerLoading,
+    explorerError,
+    currentFolder,
+    childFolders,
+    childFiles,
+    refreshExplorerData,
+  } = useExplorerData({
+    userId,
+    workspaceMode,
+    currentFolderId,
+    enabled: true,
+  })
+
+  const {
+    handleOpenFolder,
+    handleOpenFile,
+    handleOpenFolderInWorkspace,
+    handleItemChanged,
+  } = useFolderExplorerHandlers({
+    currentFolderId,
+    setCurrentFolderId,
+    setWorkspaceMode,
+    onFileSelect: handleFileSelectFromExplorer,
+    refreshExplorerData,
+    setRefreshKey: setHookRefreshKey,
+  })
+
+  // Update code when file changes (language is handled by onFileChanged callback)
+  useEffect(() => {
+    if (selectedFile) {
+      setCode(selectedFile.content || '')
     }
+  }, [selectedFile])
+
+  // handleRun is provided by useWorkspaceCodeExecution hook
+
+  function handleFileSelect(file: WorkspaceFile) {
+    // Delegate to shared hook handler to keep behavior consistent
+    void handleFileSelectFromExplorer(file)
   }
+
+  // handleDownload and handleUpload are provided by useWorkspaceImportExport hook
 
   // Check payment status on mount
   useEffect(() => {
@@ -246,37 +203,23 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
     checkPaymentStatus()
   }, [])
 
-  // Update currentFolderSlug when scopeFolderSlug changes
+  // Update currentFolderId when scopeFolderId changes
   useEffect(() => {
-    setCurrentFolderSlug(scopeFolderSlug || null)
-  }, [scopeFolderSlug])
+    setCurrentFolderId(scopeFolderId || null)
+  }, [scopeFolderId])
 
-  // Compute current folder and filtered folders/files for explorer mode
-  const currentFolder = currentFolderSlug
-    ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
-    : null
-  
-  const { childFolders, childFiles } = useFolderFileFilter({
-    folders: explorerFolders,
-    files: explorerFiles,
-    currentFolder,
-  })
-
-  // Fetch scoped folder data when scopeFolderSlug is provided
+  // Fetch scoped folder data when scopeFolderId is provided
   useEffect(() => {
-    if (scopeFolderSlug) {
+    if (scopeFolderId) {
       const fetchScopedFolder = async () => {
         try {
           setScopedFolderLoading(true)
           const res = await fetch(`/api/folders?limit=1000&depth=2`, { credentials: 'include', cache: 'no-store' })
           if (res.ok) {
             const data = await res.json()
-            // Find folder by slug, with fallback to ID for backward compatibility
+            // Find folder by ID
             const folder = (data.docs || []).find((f: any) => {
-              if (f.slug === scopeFolderSlug) return true
-              // Fallback: try matching by ID
-              if (String(f.id) === scopeFolderSlug) return true
-              return false
+              return String(f.id) === String(scopeFolderId)
             })
             if (folder) {
               setScopedFolder(folder as BasicFolderRef & { slug?: string | null })
@@ -292,52 +235,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
     } else {
       setScopedFolder(null)
     }
-  }, [scopeFolderSlug])
-
-  // Fetch folders and files for Explorer mode
-  useEffect(() => {
-    if (workspaceMode === 'explorer') {
-      const fetchExplorerData = async () => {
-        try {
-          setExplorerLoading(true)
-          setExplorerError(null)
-
-          const foldersEndpoint = userId 
-            ? `/api/dashboard/workspace/${userId}/folders`
-            : '/api/folders?limit=1000&depth=2'
-          const filesEndpoint = userId
-            ? `/api/dashboard/workspace/${userId}/files`
-            : '/api/workspace/files'
-
-          const [foldersRes, filesRes] = await Promise.all([
-            fetch(foldersEndpoint, { credentials: 'include', cache: 'no-store' }),
-            fetch(filesEndpoint, { credentials: 'include', cache: 'no-store' }),
-          ])
-
-          if (!foldersRes.ok) {
-            throw new Error('Failed to load folders')
-          }
-
-          if (!filesRes.ok) {
-            throw new Error('Failed to load files')
-          }
-
-          const foldersData = await foldersRes.json()
-          const filesData = await filesRes.json()
-
-          setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
-          setExplorerFiles((filesData.files || filesData.docs || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
-        } catch (e) {
-          console.error('Error loading explorer data', e)
-          setExplorerError('Failed to load workspace data')
-        } finally {
-          setExplorerLoading(false)
-        }
-      }
-
-      fetchExplorerData()
-    }
-  }, [workspaceMode, currentFolderSlug, userId])
+  }, [scopeFolderId])
 
   const scopedBreadcrumb = scopedFolder ? buildFolderPathChain(scopedFolder) : []
 
@@ -374,7 +272,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                   onChange={setWorkspaceMode}
                   data-testid="mode-toggle"
                 />
-                {scopeFolderSlug && scopedFolder ? (
+                {scopeFolderId && scopedFolder ? (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground min-w-0">
                     <Link
                       href="/workspace"
@@ -384,7 +282,6 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                     </Link>
                     {scopedBreadcrumb.map((folder, index) => {
                       const isLast = index === scopedBreadcrumb.length - 1
-                      const folderWithSlug = folder as BasicFolderRef & { slug?: string | null }
                       return (
                         <React.Fragment key={folder.id}>
                           <span>/</span>
@@ -394,7 +291,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                             </span>
                           ) : (
                             <Link
-                              href={`/workspace/folder/${folderWithSlug.slug || folder.id}`}
+                              href={`/workspace/folder/${folder.id}`}
                               className="hover:text-foreground hover:underline transition-colors truncate"
                             >
                               {folder.name || 'Untitled'}
@@ -412,49 +309,19 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
           }
           rightContent={
             <>
-              {/* File Explorer Toggle (only in Workspace mode) */}
-              {workspaceMode === 'workspace' && (
-                <button
-                  onClick={() => setShowFileExplorer(!showFileExplorer)}
-                  disabled={uploading}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                    showFileExplorer
-                      ? 'bg-card hover:bg-accent'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-                >
-                  <Folder className="h-4 w-4" />
-                </button>
-              )}
-              {/* Output Toggle */}
-              <button
-                onClick={() => setShowOutput(!showOutput)}
+              {/* View Controls */}
+              <WorkspaceViewControls
+                showFileExplorer={showFileExplorer}
+                showOutput={showOutput}
+                showAI={showAI}
+                hasSelectedFile={!!selectedFile}
+                workspaceMode={workspaceMode}
+                onToggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
+                onToggleOutput={() => setShowOutput(!showOutput)}
+                onToggleAI={() => setShowAI(!showAI)}
                 disabled={uploading}
-                className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                  showOutput
-                    ? 'bg-card hover:bg-accent'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                title={showOutput ? 'Hide Output' : 'Show Output'}
-              >
-                <Terminal className="h-4 w-4" />
-              </button>
-              {/* AI Help Toggle */}
-              {selectedFile && (
-                <button
-                  onClick={() => setShowAI(!showAI)}
-                  disabled={uploading}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                    showAI
-                      ? 'bg-card hover:bg-accent'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title={showAI ? 'Hide AI Help' : 'Show AI Help'}
-                >
-                  <Sparkles className="h-4 w-4" />
-                </button>
-              )}
+                size="md"
+              />
               {/* Download Workspace */}
               <button
                 onClick={handleDownload}
@@ -499,49 +366,19 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
             onChange={setWorkspaceMode}
             data-testid="mode-toggle"
           />
-          {/* File Explorer Toggle (only in Workspace mode) */}
-          {workspaceMode === 'workspace' && (
-            <button
-              onClick={() => setShowFileExplorer(!showFileExplorer)}
-              disabled={uploading}
-              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                showFileExplorer
-                  ? 'bg-card hover:bg-accent'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-            >
-              <Folder className="h-4 w-4" />
-            </button>
-          )}
-          {/* Output Toggle */}
-          <button
-            onClick={() => setShowOutput(!showOutput)}
+          {/* View Controls */}
+          <WorkspaceViewControls
+            showFileExplorer={showFileExplorer}
+            showOutput={showOutput}
+            showAI={showAI}
+            hasSelectedFile={!!selectedFile}
+            workspaceMode={workspaceMode}
+            onToggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
+            onToggleOutput={() => setShowOutput(!showOutput)}
+            onToggleAI={() => setShowAI(!showAI)}
             disabled={uploading}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-              showOutput
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={showOutput ? 'Hide Output' : 'Show Output'}
-          >
-            <Terminal className="h-4 w-4" />
-          </button>
-          {/* AI Help Toggle */}
-          {selectedFile && (
-            <button
-              onClick={() => setShowAI(!showAI)}
-              disabled={uploading}
-              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors ${
-                showAI
-                  ? 'bg-card hover:bg-accent'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={showAI ? 'Hide AI Help' : 'Show AI Help'}
-            >
-              <Sparkles className="h-4 w-4" />
-            </button>
-          )}
+            size="md"
+          />
           {/* Download Workspace */}
           <button
             onClick={handleDownload}
@@ -571,87 +408,20 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
       {workspaceMode === 'explorer' ? (
         /* Explorer Mode */
         <div className="flex flex-1 overflow-hidden">
-          {(() => {
-            // Handler to refresh both explorer data and file explorer
-            const handleItemChanged = async () => {
-              // Refresh explorer data
-              try {
-                setExplorerLoading(true)
-                setExplorerError(null)
-
-                const foldersEndpoint = userId 
-                  ? `/api/dashboard/workspace/${userId}/folders`
-                  : '/api/folders?limit=1000&depth=2'
-                const filesEndpoint = userId
-                  ? `/api/dashboard/workspace/${userId}/files`
-                  : '/api/workspace/files'
-
-                const [foldersRes, filesRes] = await Promise.all([
-                  fetch(foldersEndpoint, { credentials: 'include', cache: 'no-store' }),
-                  fetch(filesEndpoint, { credentials: 'include', cache: 'no-store' }),
-                ])
-
-                if (foldersRes.ok && filesRes.ok) {
-                  const foldersData = await foldersRes.json()
-                  const filesData = await filesRes.json()
-
-                  setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
-                  setExplorerFiles((filesData.files || filesData.docs || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
-                }
-              } catch (e) {
-                console.error('Error refreshing explorer data', e)
-              } finally {
-                setExplorerLoading(false)
-              }
-              
-              // Also refresh file explorer in workspace mode
-              setRefreshKey((prev) => prev + 1)
-            }
-
-            return (
-              <FolderExplorerView
-                currentFolder={currentFolder}
-                childFolders={childFolders}
-                childFiles={childFiles}
-                loading={explorerLoading}
-                error={explorerError}
-                isRoot={!currentFolder}
-                allFolders={explorerFolders}
-                onOpenFolder={(slug) => {
-                  if (slug === '') {
-                    setCurrentFolderSlug(null)
-                  } else {
-                    setCurrentFolderSlug(slug)
-                  }
-                }}
-                onOpenFile={async (fileId) => {
-                  // Fetch file content and select it
-                  try {
-                    const fileRes = await fetch(`/api/files/${fileId}`, {
-                      credentials: 'include',
-                    })
-                    if (fileRes.ok) {
-                      const fileData = await fileRes.json()
-                      handleFileSelect({
-                        id: String(fileData.id),
-                        name: fileData.name,
-                        content: fileData.content || '',
-                      })
-                      setWorkspaceMode('workspace')
-                    }
-                  } catch (error) {
-                    console.error('Failed to load file:', error)
-                  }
-                }}
-                onOpenFolderInWorkspace={(slug) => {
-                  setCurrentFolderSlug(slug)
-                  setWorkspaceMode('workspace')
-                }}
-                onItemChanged={handleItemChanged}
-                readOnly={readOnly}
-              />
-            )
-          })()}
+          <FolderExplorerView
+            currentFolder={currentFolder}
+            childFolders={childFolders}
+            childFiles={childFiles}
+            loading={explorerLoading}
+            error={explorerError}
+            isRoot={!currentFolder}
+            allFolders={explorerFolders}
+            onOpenFolder={handleOpenFolder}
+            onOpenFile={handleOpenFile}
+            onOpenFolderInWorkspace={handleOpenFolderInWorkspace}
+            onItemChanged={handleItemChanged}
+            readOnly={readOnly}
+          />
         </div>
       ) : (
         /* Workspace Mode */
@@ -662,10 +432,10 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                 key={refreshKey}
                 onFileSelect={handleFileSelect}
                 selectedFileId={selectedFile?.id}
-                onFileSaved={handleFileSaved}
+                onFileSaved={() => setRefreshKey((prev) => prev + 1)}
                 userId={userId}
                 readOnly={readOnly}
-                rootFolderSlug={currentFolderSlug || undefined}
+                rootFolderSlug={currentFolderId ? String(currentFolderId) : undefined}
               />
             </FileExplorerSidebar>
           }
@@ -680,7 +450,8 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
                 onChange={setCode}
                 onRun={handleRun}
                 executing={executing}
-                onSave={handleFileSaved}
+                executionResult={executionResult}
+                onSave={() => setRefreshKey((prev) => prev + 1)}
                 readOnly={readOnly}
                 allowRunInReadOnly={readOnly}
               />
@@ -693,7 +464,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderSlug }: W
               <OutputPanel
                 result={executionResult}
                 executing={executing}
-                onClear={() => setExecutionResult(null)}
+                onClear={clearResult}
               />
             </OutputPanelWrapper>
           }

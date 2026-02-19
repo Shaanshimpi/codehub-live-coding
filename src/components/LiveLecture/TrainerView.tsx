@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { LiveCodePlayground, SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
+import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
 import { Save, CheckCircle } from 'lucide-react'
 import type { ExecutionResult } from '@/services/codeExecution'
 
@@ -99,7 +100,7 @@ export function TrainerView({
 
         {/* AI Assistant Panel (conditional) */}
         {showAI && (
-          <div className="flex w-[35%] flex-col">
+          <AIAssistantPanelWrapper>
             <AIAssistantPanel
               role="trainer"
               lectureId={lectureId}
@@ -112,11 +113,11 @@ export function TrainerView({
                 setShowAI(false)
               }}
             />
-          </div>
+          </AIAssistantPanelWrapper>
         )}
 
         {/* Right side: Output + Participants stacked */}
-        <div className={`flex flex-col gap-2 ${showAI ? 'w-64' : 'w-80'}`}>
+        <div className={`flex flex-col gap-2 h-full overflow-hidden ${showAI ? 'w-64' : 'w-80'}`}>
           {/* Output panel */}
           <div className="flex flex-1 flex-col rounded-lg border bg-card overflow-hidden">
             <div className="border-b bg-muted/30 px-3 py-1.5">

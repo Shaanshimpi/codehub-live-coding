@@ -10,20 +10,9 @@ import { RenameItemModal } from './RenameItemModal'
 import { MoveItemModal } from './MoveItemModal'
 import { CreateFolderModal } from './CreateFolderModal'
 import { CreateFileModal } from './CreateFileModal'
+import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
-type Folder = BasicFolderRef & {
-  parentFolder?: BasicFolderRef | null
-  slug?: string | null
-}
-
-type WorkspaceFile = {
-  id: string
-  name: string
-  folder?: {
-    id: string | number
-    name?: string | null
-  } | null
-}
+type WorkspaceFile = WorkspaceFileWithFolder
 
 interface FolderExplorerViewProps {
   /** Current folder being viewed (null for root) */
@@ -43,11 +32,11 @@ interface FolderExplorerViewProps {
   /** Function to open full workspace editor (for root view) */
   onOpenFullWorkspace?: () => void
   /** Function to open a folder (for internal navigation, e.g., in session) */
-  onOpenFolder?: (slug: string) => void
+  onOpenFolder?: (folderId: string | number) => void
   /** Function to open a file (for internal navigation, e.g., in session) */
   onOpenFile?: (fileId: string) => void
   /** Function to open a folder in workspace mode (switches mode and sets folder context) */
-  onOpenFolderInWorkspace?: (slug: string) => void
+  onOpenFolderInWorkspace?: (folderId: string | number) => void
   /** All folders (needed for breadcrumb navigation when using callbacks) */
   allFolders?: Folder[]
   /** Callback when item is renamed/moved/deleted (to refresh data) */
@@ -81,11 +70,11 @@ export function FolderExplorerView({
 
   // Helper to handle folder opening
   const handleOpenFolder = (folder: Folder) => {
-    if (onOpenFolder && folder.slug) {
-      onOpenFolder(folder.slug)
-    } else if (folder.slug) {
+    if (onOpenFolder && folder.id) {
+      onOpenFolder(folder.id)
+    } else if (folder.id) {
       // Fallback to Link navigation for standalone workspace
-      window.location.href = `/workspace/explorer/${folder.slug}`
+      window.location.href = `/workspace/explorer/${folder.id}`
     }
   }
 
@@ -93,9 +82,9 @@ export function FolderExplorerView({
   const handleOpenFile = (file: WorkspaceFile) => {
     if (onOpenFile) {
       onOpenFile(file.id)
-    } else if (currentFolder?.slug) {
+    } else if (currentFolder?.id) {
       // Fallback to Link navigation for standalone workspace
-      window.location.href = `/workspace/folder/${currentFolder.slug}?fileId=${file.id}`
+      window.location.href = `/workspace/folder/${currentFolder.id}?fileId=${file.id}`
     } else {
       window.location.href = `/workspace?fileId=${file.id}`
     }
@@ -172,8 +161,8 @@ export function FolderExplorerView({
     const folderInList = allFolders.find((f) => String(f.id) === String(folder.id))
     if (folderInList?.parentFolder) {
       const parent = allFolders.find((f) => String(f.id) === String(folderInList.parentFolder!.id))
-      if (parent?.slug) {
-        onOpenFolder(parent.slug)
+      if (parent?.id) {
+        onOpenFolder(parent.id)
       } else {
         onOpenFolder('') // Go to root
       }
@@ -196,8 +185,8 @@ export function FolderExplorerView({
                       const parent = allFolders.find(
                         (f) => String(f.id) === String(currentFolder.parentFolder!.id)
                       )
-                      if (parent?.slug) {
-                        onOpenFolder(parent.slug)
+                      if (parent?.id) {
+                        onOpenFolder(parent.id)
                       } else {
                         onOpenFolder('') // Go to root
                       }
@@ -260,7 +249,7 @@ export function FolderExplorerView({
                       </button>
                     ) : (
                       <Link
-                        href={`/workspace/explorer/${folderWithSlug.slug || folder.id}`}
+                        href={`/workspace/explorer/${folder.id}`}
                         className="hover:text-foreground hover:underline transition-colors"
                       >
                         {folder.name || 'Untitled'}
@@ -307,7 +296,7 @@ export function FolderExplorerView({
           ) : currentFolder && onOpenFolderInWorkspace ? (
             <button
               type="button"
-              onClick={() => onOpenFolderInWorkspace(currentFolder.slug || String(currentFolder.id))}
+              onClick={() => onOpenFolderInWorkspace(currentFolder.id)}
               className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
               title="Open this folder in Workspace editor view"
             >
@@ -316,7 +305,7 @@ export function FolderExplorerView({
             </button>
           ) : currentFolder ? (
             <Link
-              href={`/workspace/folder/${currentFolder.slug || currentFolder.id}`}
+              href={`/workspace/folder/${currentFolder.id}`}
               className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
               title="Open this folder in Workspace editor view"
             >
@@ -385,7 +374,7 @@ export function FolderExplorerView({
                         currentFolder={currentFolder}
                         readOnly={readOnly}
                         onOpenFolder={() => handleOpenFolder(folder)}
-                        onOpenInWorkspace={onOpenFolderInWorkspace ? () => onOpenFolderInWorkspace(folder.slug || String(folder.id)) : undefined}
+                        onOpenInWorkspace={onOpenFolderInWorkspace ? () => onOpenFolderInWorkspace(folder.id) : undefined}
                         onRename={() => setShowRenameModal({ type: 'folder', id: String(folder.id), name: folder.name || 'Untitled' })}
                         onMove={() => setShowMoveModal({ type: 'folder', id: String(folder.id), currentParentId: currentFolder?.id || null })}
                         onDelete={() => {
@@ -607,7 +596,7 @@ function FolderCard({
           </button>
         ) : (
           <Link
-            href={`/workspace/folder/${folder.slug || folder.id}`}
+            href={`/workspace/folder/${folder.id}`}
             onClick={(e) => e.stopPropagation()}
             className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors text-center"
             title="Open this folder in Workspace editor view"

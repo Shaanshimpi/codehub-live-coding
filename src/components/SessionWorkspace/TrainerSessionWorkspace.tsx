@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { FileExplorer } from '@/components/Workspace/FileExplorer'
 import { WorkspaceEditor } from '@/components/Workspace/WorkspaceEditor'
@@ -9,7 +9,9 @@ import { LiveCodePlayground } from '@/components/LiveCodePlayground'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
-import { Radio, RefreshCw, Sparkles, X, Users, ChevronDown, ChevronUp, Loader2, Save, File, CheckCircle, ArrowLeft, Folder, Terminal } from 'lucide-react'
+import { inferLanguageFromFileName } from '@/utilities/languageInference'
+import { WorkspaceViewControls } from '@/components/Workspace/WorkspaceViewControls'
+import { Radio, RefreshCw, X, Users, ChevronDown, ChevronUp, Loader2, ArrowLeft } from 'lucide-react'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import { cn } from '@/utilities/ui'
@@ -24,14 +26,15 @@ import { FileExplorerSidebar } from '@/components/Workspace/FileExplorerSidebar'
 import { OutputPanelWrapper } from '@/components/Workspace/OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
 import { FileSwitchingOverlay } from '@/components/Workspace/FileSwitchingOverlay'
-import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
+import { WorkspaceEditorHeader } from '@/components/Workspace/WorkspaceEditorHeader'
+import { useExplorerData } from '@/hooks/workspace/useExplorerData'
+import { useFileSelection } from '@/hooks/workspace/useFileSelection'
+import { useSaveCode } from '@/hooks/workspace/useSaveCode'
+import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { SessionMetadataModal } from '@/components/Session/SessionMetadataModal'
+import type { WorkspaceFileWithContent } from '@/types/workspace'
 
-type WorkspaceFile = {
-  id: string
-  name: string
-  content: string
-}
+type WorkspaceFile = WorkspaceFileWithContent
 
 interface TrainerSessionWorkspaceProps {
   sessionCode: string
@@ -69,30 +72,17 @@ export function TrainerSessionWorkspace({
   expandedStudentIds,
   onToggleStudent,
 }: TrainerSessionWorkspaceProps) {
-  const [selectedFile, setSelectedFile] = useState<WorkspaceFile | null>(null)
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
-  const [executing, setExecuting] = useState(false)
-  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
   const [showAI, setShowAI] = useState(false)
   const [showStudents, setShowStudents] = useState(false)
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
-  const [refreshKey, setRefreshKey] = useState(0)
   const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('workspace')
-  const [currentFolderSlug, setCurrentFolderSlug] = useState<string | null>(null)
-  const [explorerFolders, setExplorerFolders] = useState<Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>>([])
-  const [explorerFiles, setExplorerFiles] = useState<Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>>([])
-  const [explorerLoading, setExplorerLoading] = useState(false)
-  const [explorerError, setExplorerError] = useState<string | null>(null)
+  const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(null)
   const [showFileModal, setShowFileModal] = useState(false)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [activeFileName, setActiveFileName] = useState<string>('')
-  const [savingCode, setSavingCode] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [switchingFile, setSwitchingFile] = useState(false)
-  const [lastSavedCode, setLastSavedCode] = useState<string>('') // Track last saved code to enable/disable Run button
   const [showMetadataModal, setShowMetadataModal] = useState(false)
   
   // Local student code edits (not synced with students)
@@ -105,58 +95,116 @@ export function TrainerSessionWorkspace({
   
   const { theme: appTheme } = useTheme()
 
-  // Compute current folder and filtered folders/files for explorer mode
-  const currentFolder = currentFolderSlug
-    ? explorerFolders.find((f) => f.slug === currentFolderSlug || String(f.id) === currentFolderSlug) || null
-    : null
-  
-  const { childFolders, childFiles } = useFolderFileFilter({
-    folders: explorerFolders,
-    files: explorerFiles,
-    currentFolder,
+  // Refs for saveCurrentFile to avoid circular dependency
+  const saveCurrentFileRef = useRef<(() => Promise<boolean>) | null>(null)
+  // Ref to store latest handleFileSelect to avoid stale closure in useEffect
+  const handleFileSelectRef = useRef<((file: { id: string; name: string; content: string }) => Promise<void>) | null>(null)
+
+  // File selection management with auto-save
+  const {
+    selectedFile,
+    handleFileSelect: hookHandleFileSelect,
+    handleFileSelectFromModal: hookHandleFileSelectFromModal,
+    switchingFile,
+    refreshKey,
+    setRefreshKey,
+  } = useFileSelection({
+    sessionCode,
+    autoSaveBeforeSwitch: true,
+    saveCurrentFile: async () => {
+      // Use ref to call the latest saveCurrentFile from useSaveCode
+      if (saveCurrentFileRef.current) {
+        return await saveCurrentFileRef.current()
+      }
+      return false
+    },
+    onFileChanged: (file) => {
+      // Update code and language when file changes
+      setCode(file.content || '')
+      const inferredLanguage = inferLanguageFromFileName(file.name, language || 'javascript')
+      setLanguage(inferredLanguage)
+      setActiveFileId(file.id)
+      setActiveFileName(file.name)
+      console.log('[TrainerSessionWorkspace] File changed via hook', {
+        fileName: file.name,
+        inferredLanguage,
+        fileId: file.id
+      })
+    },
   })
 
-  // Fetch folders and files for Explorer mode
+  // Update ref with latest handleFileSelect
   useEffect(() => {
-    if (workspaceMode === 'explorer') {
-      const fetchExplorerData = async () => {
-        try {
-          setExplorerLoading(true)
-          setExplorerError(null)
+    handleFileSelectRef.current = hookHandleFileSelect
+  }, [hookHandleFileSelect])
 
-          const [foldersRes, filesRes] = await Promise.all([
-            fetch('/api/folders?limit=1000&depth=2', { credentials: 'include', cache: 'no-store' }),
-            fetch('/api/workspace/files', { credentials: 'include', cache: 'no-store' }),
-          ])
+  // Save code management with session sync
+  const {
+    savingCode,
+    saveSuccess,
+    lastSavedCode,
+    lastUpdate,
+    handleSaveCode,
+    saveCurrentFile,
+  } = useSaveCode({
+    selectedFile,
+    code,
+    language,
+    sessionCode,
+    sessionSyncType: 'broadcast',
+    onSaveSuccess: () => {
+      setRefreshKey((prev) => prev + 1) // Refresh file explorer
+    },
+  })
 
-          if (!foldersRes.ok) {
-            throw new Error('Failed to load folders')
-          }
+  // Update ref so useFileSelection can call the latest saveCurrentFile
+  useEffect(() => {
+    saveCurrentFileRef.current = saveCurrentFile
+  }, [saveCurrentFile])
 
-          if (!filesRes.ok) {
-            throw new Error('Failed to load files')
-          }
+  // Code execution with session sync
+  const {
+    executing,
+    executionResult,
+    handleRun,
+    clearResult,
+  } = useWorkspaceCodeExecution({
+    language,
+    sessionCode,
+    selectedFile,
+    syncToSession: true,
+    sessionSyncType: 'broadcast',
+    lastSavedCode,
+  })
 
-          const foldersData = await foldersRes.json()
-          const filesData = await filesRes.json()
+  // Explorer data for explorer mode
+  const {
+    explorerFolders,
+    explorerFiles,
+    explorerLoading,
+    explorerError,
+    currentFolder,
+    childFolders,
+    childFiles,
+    refreshExplorerData,
+  } = useExplorerData({
+    workspaceMode,
+    currentFolderId,
+    enabled: workspaceMode === 'explorer',
+  })
 
-          setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
-          setExplorerFiles((filesData.files || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
-        } catch (e) {
-          console.error('Error loading explorer data', e)
-          setExplorerError('Failed to load workspace data')
-        } finally {
-          setExplorerLoading(false)
-        }
-      }
+  // Track if we've attempted to load the active file to prevent infinite loops
+  const hasAttemptedLoadRef = useRef(false)
 
-      fetchExplorerData()
+  // Load active file from session on mount (only once per session)
+  useEffect(() => {
+    // Don't run if we've already attempted to load or if a file is already selected
+    if (hasAttemptedLoadRef.current || selectedFile) {
+      return
     }
-  }, [workspaceMode, currentFolderSlug])
 
-  // Load active file from session on mount
-  useEffect(() => {
     const loadActiveFile = async () => {
+      hasAttemptedLoadRef.current = true
       try {
         const res = await fetch(`/api/sessions/${sessionCode}/live`, { cache: 'no-store' })
         if (res.ok) {
@@ -170,32 +218,30 @@ export function TrainerSessionWorkspace({
               const fileData = await fileRes.json()
               // Ensure fileId is a string (Payload returns numbers)
               const fileIdStr = String(fileData.id)
-              setSelectedFile({
-                id: fileIdStr,
-                name: fileData.name,
-                content: fileData.content || '',
-              })
-              setActiveFileId(fileIdStr)
-              setActiveFileName(fileData.name)
+              // Trigger file selection - hook's onFileChanged will handle state updates
+              if (handleFileSelectRef.current) {
+                await handleFileSelectRef.current({
+                  id: fileIdStr,
+                  name: fileData.name,
+                  content: fileData.content || '',
+                })
+              }
               
-              // Infer language from extension if not provided
+              // Set language if provided by API (onFileChanged will infer if not)
               if (fileData.language) {
                 setLanguage(fileData.language)
-              } else {
-                const parts = fileData.name.split('.')
-                const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-                if (ext) {
-                  const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-                  if (byExt) {
-                    setLanguage(byExt.id)
-                  }
-                }
               }
+            } else {
+              // File fetch failed - show modal
+              setShowFileModal(true)
             }
           } else {
             // No file selected - show modal
             setShowFileModal(true)
           }
+        } else {
+          // Session fetch failed - show modal
+          setShowFileModal(true)
         }
       } catch (error) {
         console.error('Failed to load active file:', error)
@@ -204,112 +250,18 @@ export function TrainerSessionWorkspace({
       }
     }
     loadActiveFile()
+  }, [sessionCode]) // Only depend on sessionCode, not hookHandleFileSelect
+
+  // Reset the load attempt flag when session code changes
+  useEffect(() => {
+    hasAttemptedLoadRef.current = false
   }, [sessionCode])
 
-  // Update code when file changes
-  useEffect(() => {
-    if (selectedFile) {
-      const fileContent = selectedFile.content || ''
-      setCode(fileContent)
-      setLastSavedCode(fileContent) // Mark as saved when file is loaded
-      const parts = selectedFile.name.split('.')
-      const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-      if (ext) {
-        const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-        if (byExt) {
-          setLanguage(byExt.id)
-        }
-      }
-      setActiveFileId(selectedFile.id)
-      setActiveFileName(selectedFile.name)
-    }
-  }, [selectedFile])
-
-  const saveCurrentFile = useCallback(async (): Promise<boolean> => {
-    if (!selectedFile || !sessionCode) return false
-
-    try {
-      // Save to workspace file - ensure fileId is string
-      const fileIdStr = String(selectedFile.id)
-      const saveRes = await fetch(`/api/files/${fileIdStr}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ content: code }),
-      })
-
-      if (!saveRes.ok) {
-        throw new Error('Failed to save file')
-      }
-
-      // Broadcast file ID to session
-      const broadcastRes = await fetch(`/api/sessions/${sessionCode}/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          workspaceFileId: selectedFile.id,
-          workspaceFileName: selectedFile.name,
-          languageSlug: language,
-        }),
-      })
-
-      if (!broadcastRes.ok) {
-        throw new Error('Failed to broadcast')
-      }
-
-      return true
-    } catch (error) {
-      console.error('Failed to save:', error)
-      return false
-    }
-  }, [selectedFile, code, language, sessionCode])
+  // File selection updates are handled by useFileSelection hook's onFileChanged callback
 
   const handleFileSelect = useCallback(async (file: { id: string; name: string; content: string }) => {
-    // Auto-save current file before switching (if changed)
-    if (selectedFile && code !== selectedFile.content) {
-      setSwitchingFile(true)
-      try {
-        await saveCurrentFile()
-      } catch (error) {
-        console.error('Failed to save before switching:', error)
-      } finally {
-        setSwitchingFile(false)
-      }
-    }
-    
-    // Fetch fresh file content
-    try {
-      const fileRes = await fetch(`/api/files/${file.id}`, { credentials: 'include' })
-      if (fileRes.ok) {
-        const fileData = await fileRes.json()
-        // Ensure fileId is a string
-        const fileIdStr = String(fileData.id)
-        setSelectedFile({
-          id: fileIdStr,
-          name: fileData.name,
-          content: fileData.content || '',
-        })
-      } else {
-        // Fallback to provided content
-        const fileIdStr = String(file.id)
-        setSelectedFile({
-          id: fileIdStr,
-          name: file.name,
-          content: file.content,
-        })
-      }
-    } catch (error) {
-      console.error('Failed to load file:', error)
-      // Fallback to provided content
-      const fileIdStr = String(file.id)
-      setSelectedFile({
-        id: fileIdStr,
-        name: file.name,
-        content: file.content,
-      })
-    }
-  }, [selectedFile, code, saveCurrentFile])
+    await hookHandleFileSelect(file)
+  }, [hookHandleFileSelect])
 
   const handleFileSelectFromModal = async (
     fileId: string | null,
@@ -317,101 +269,15 @@ export function TrainerSessionWorkspace({
     content: string,
     fileLanguage: string
   ) => {
-    if (fileId === null) {
-      // File selection is required - keep modal open
-      alert('Please select or create a file to continue')
-      return
-    }
-
-    // Ensure fileId is a string
-    const fileIdStr = String(fileId)
-
-    // Try to fetch full file content, but fallback to provided content if fetch fails
-    // This handles cases where file was just created and might not be immediately available
-    try {
-      const res = await fetch(`/api/files/${fileIdStr}`, { credentials: 'include' })
-      if (res.ok) {
-        const fileData = await res.json()
-        const fileContent = fileData.content || ''
-        
-        // Set selected file immediately
-        setSelectedFile({
-          id: String(fileData.id),
-          name: fileData.name,
-          content: fileContent,
-        })
-        
-        // Update code and language immediately (don't wait for useEffect)
-        setCode(fileContent)
-        if (fileLanguage) {
-          setLanguage(fileLanguage)
-        } else {
-          // Infer language from file extension if not provided
-          const parts = fileData.name.split('.')
-          const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-          if (ext) {
-            const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-            if (byExt) {
-              setLanguage(byExt.id)
-            }
-          }
-        }
-        setActiveFileId(String(fileData.id))
-        setActiveFileName(fileData.name)
-      } else {
-        // If fetch fails (e.g., file just created), use provided data
-        console.warn('Failed to fetch file, using provided data:', res.status)
-        setSelectedFile({
-          id: fileIdStr,
-          name: fileName,
-          content: content || '',
-        })
-        setCode(content || '')
-        if (fileLanguage) {
-          setLanguage(fileLanguage)
-        } else {
-          // Infer language from file extension
-          const parts = fileName.split('.')
-          const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-          if (ext) {
-            const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-            if (byExt) {
-              setLanguage(byExt.id)
-            }
-          }
-        }
-        setActiveFileId(fileIdStr)
-        setActiveFileName(fileName)
-      }
-    } catch (error) {
-      // If fetch fails, use provided data (file was likely just created)
-      console.warn('Failed to fetch file, using provided data:', error)
-      setSelectedFile({
-        id: fileIdStr,
-        name: fileName,
-        content: content || '',
-      })
-      setCode(content || '')
-      if (fileLanguage) {
-        setLanguage(fileLanguage)
-      } else {
-        // Infer language from file extension
-        const parts = fileName.split('.')
-        const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
-        if (ext) {
-          const byExt = SUPPORTED_LANGUAGES.find((lang) => lang.extension.replace('.', '') === ext)
-          if (byExt) {
-            setLanguage(byExt.id)
-          }
-        }
-      }
-      setActiveFileId(fileIdStr)
-      setActiveFileName(fileName)
+    await hookHandleFileSelectFromModal(fileId, fileName, content, fileLanguage)
+    
+    // Update language if provided (hook doesn't handle this)
+    if (fileLanguage) {
+      setLanguage(fileLanguage)
     }
     
-    // Close modal and refresh explorer regardless of fetch result
+    // Close modal
     setShowFileModal(false)
-    setRefreshKey((prev) => prev + 1)
   }
 
   // Handler to initialize or update local student code
@@ -507,76 +373,7 @@ export function TrainerSessionWorkspace({
     })
   }, [expandedStudentIds, students])
 
-  const handleSaveCode = useCallback(async () => {
-    if (!selectedFile || !sessionCode) {
-      alert('Please select a file first')
-      return
-    }
-
-    setSavingCode(true)
-    setSaveSuccess(false)
-
-    try {
-      const success = await saveCurrentFile()
-      if (success) {
-        setLastSavedCode(code) // Update last saved code after successful save
-        setLastUpdate(new Date())
-        setSaveSuccess(true)
-        setTimeout(() => setSaveSuccess(false), 3000) // Increased from 2s to 3s
-        setRefreshKey((prev) => prev + 1) // Refresh file explorer
-      } else {
-        alert('Failed to save. Please try again.')
-      }
-    } catch (error) {
-      console.error('Failed to save:', error)
-      alert('Failed to save')
-    } finally {
-      setSavingCode(false)
-    }
-  }, [selectedFile, sessionCode, saveCurrentFile])
-
-  const handleRun = async (currentCode: string, input?: string) => {
-    // Prevent running if there are unsaved changes (button should be disabled, but check as safety)
-    if (currentCode !== lastSavedCode) {
-      return
-    }
-
-    setExecuting(true)
-    setExecutionResult(null)
-
-    try {
-      const result = await executeCode(language, currentCode, input)
-      setExecutionResult(result)
-      setLastUpdate(new Date())
-
-      // Broadcast output to session
-      await fetch(`/api/sessions/${sessionCode}/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          workspaceFileId: selectedFile?.id,
-          workspaceFileName: selectedFile?.name,
-          currentOutput: result,
-          languageSlug: language,
-        }),
-      }).catch(() => {})
-    } catch (error) {
-      console.error('Execution error:', error)
-      setExecutionResult({
-        stdout: '',
-        stderr: error instanceof Error ? error.message : 'Unknown error occurred',
-        status: 'error',
-        exitCode: 1,
-      })
-    } finally {
-      setExecuting(false)
-    }
-  }
-
-  const handleFileSaved = () => {
-    setRefreshKey((prev) => prev + 1)
-  }
+  // handleSaveCode and handleRun are provided by hooks
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
@@ -619,46 +416,18 @@ export function TrainerSessionWorkspace({
             onChange={setWorkspaceMode}
             data-testid="mode-toggle"
           />
-          {/* File Explorer Toggle (only in Workspace mode) */}
-          {workspaceMode === 'workspace' && (
-            <button
-              onClick={() => setShowFileExplorer(!showFileExplorer)}
-              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                showFileExplorer
-                  ? 'bg-card hover:bg-accent'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-              title={showFileExplorer ? 'Hide File Explorer' : 'Show File Explorer'}
-            >
-              <Folder className="h-3 w-3" />
-            </button>
-          )}
-          {/* Output Toggle */}
-          <button
-            onClick={() => setShowOutput(!showOutput)}
-            className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-              showOutput
-                ? 'bg-card hover:bg-accent'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-            }`}
-            title={showOutput ? 'Hide Output' : 'Show Output'}
-          >
-            <Terminal className="h-3 w-3" />
-          </button>
-          {/* AI Help Toggle */}
-          {selectedFile && (
-            <button
-              onClick={() => setShowAI(!showAI)}
-              className={`flex items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                showAI
-                  ? 'bg-card hover:bg-accent'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
-              }`}
-              title={showAI ? 'Hide AI Help' : 'Show AI Help'}
-            >
-              <Sparkles className="h-3 w-3" />
-            </button>
-          )}
+          {/* View Controls */}
+          <WorkspaceViewControls
+            showFileExplorer={showFileExplorer}
+            showOutput={showOutput}
+            showAI={showAI}
+            hasSelectedFile={!!selectedFile}
+            workspaceMode={workspaceMode}
+            onToggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
+            onToggleOutput={() => setShowOutput(!showOutput)}
+            onToggleAI={() => setShowAI(!showAI)}
+            size="sm"
+          />
           <button
             onClick={() => setShowStudents((prev) => !prev)}
             className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent transition-colors"
@@ -859,81 +628,50 @@ export function TrainerSessionWorkspace({
       {workspaceMode === 'explorer' ? (
         /* Explorer Mode */
         <div className="flex flex-1 overflow-hidden">
-          {(() => {
-            // Handler to refresh both explorer data and file explorer
-            const handleItemChanged = async () => {
-              // Refresh explorer data
-              try {
-                setExplorerLoading(true)
-                setExplorerError(null)
-
-                const [foldersRes, filesRes] = await Promise.all([
-                  fetch('/api/folders?limit=1000&depth=2', { credentials: 'include', cache: 'no-store' }),
-                  fetch('/api/workspace/files', { credentials: 'include', cache: 'no-store' }),
-                ])
-
-                if (foldersRes.ok && filesRes.ok) {
-                  const foldersData = await foldersRes.json()
-                  const filesData = await filesRes.json()
-
-                  setExplorerFolders((foldersData.docs || []) as Array<BasicFolderRef & { parentFolder?: BasicFolderRef | null; slug?: string | null }>)
-                  setExplorerFiles((filesData.files || []) as Array<{ id: string; name: string; folder?: { id: string | number; name?: string | null; slug?: string | null } | null }>)
-                }
-              } catch (e) {
-                console.error('Error refreshing explorer data', e)
-                setExplorerError('Failed to refresh workspace data')
-              } finally {
-                setExplorerLoading(false)
+          <FolderExplorerView
+            currentFolder={currentFolder}
+            childFolders={childFolders}
+            childFiles={childFiles}
+            loading={explorerLoading}
+            error={explorerError}
+            isRoot={!currentFolder}
+            allFolders={explorerFolders}
+            onOpenFolder={(folderId) => {
+              if (folderId === '') {
+                setCurrentFolderId(null)
+              } else {
+                setCurrentFolderId(folderId)
               }
-              
-              // Also refresh file explorer if in workspace mode
-              setRefreshKey((prev) => prev + 1)
-            }
-
-            return (
-              <FolderExplorerView
-                currentFolder={currentFolder}
-                childFolders={childFolders}
-                childFiles={childFiles}
-                loading={explorerLoading}
-                error={explorerError}
-                isRoot={!currentFolder}
-                allFolders={explorerFolders}
-                onOpenFolder={(slug) => {
-                  if (slug === '') {
-                    setCurrentFolderSlug(null)
-                  } else {
-                    setCurrentFolderSlug(slug)
-                  }
-                }}
-                onOpenFile={async (fileId) => {
-                  // Fetch file content and select it (consistent with student implementation)
-                  try {
-                    const fileRes = await fetch(`/api/files/${fileId}`, {
-                      credentials: 'include',
-                    })
-                    if (fileRes.ok) {
-                      const fileData = await fileRes.json()
-                      handleFileSelect({
-                        id: String(fileData.id),
-                        name: fileData.name,
-                        content: fileData.content || '',
-                      })
-                      setWorkspaceMode('workspace')
-                    }
-                  } catch (error) {
-                    console.error('Failed to load file:', error)
-                  }
-                }}
-                onOpenFolderInWorkspace={(slug) => {
-                  setCurrentFolderSlug(slug)
+            }}
+            onOpenFile={async (fileId) => {
+              // Fetch file content and select it (consistent with student implementation)
+              try {
+                const fileRes = await fetch(`/api/files/${fileId}`, {
+                  credentials: 'include',
+                })
+                if (fileRes.ok) {
+                  const fileData = await fileRes.json()
+                  handleFileSelect({
+                    id: String(fileData.id),
+                    name: fileData.name,
+                    content: fileData.content || '',
+                  })
                   setWorkspaceMode('workspace')
-                }}
-                onItemChanged={handleItemChanged}
-                readOnly={false}
-              />
-            )
-          })()}
+                }
+              } catch (error) {
+                console.error('Failed to load file:', error)
+              }
+            }}
+            onOpenFolderInWorkspace={(folderId) => {
+              setCurrentFolderId(folderId)
+              setWorkspaceMode('workspace')
+            }}
+            onItemChanged={async () => {
+              await refreshExplorerData()
+              setRefreshKey((prev) => prev + 1)
+            }}
+            readOnly={false}
+          />
         </div>
       ) : (
         /* Workspace Mode */
@@ -949,8 +687,8 @@ export function TrainerSessionWorkspace({
                 key={refreshKey}
                 onFileSelect={handleFileSelect}
                 selectedFileId={activeFileId || undefined}
-                onFileSaved={handleFileSaved}
-                rootFolderSlug={currentFolderSlug || undefined}
+                onFileSaved={() => setRefreshKey((prev) => prev + 1)}
+                rootFolderSlug={currentFolderId ? String(currentFolderId) : undefined}
                 readOnly={false}
               />
             </FileExplorerSidebar>
@@ -958,67 +696,18 @@ export function TrainerSessionWorkspace({
           editor={
             selectedFile ? (
               <>
-                {/* Editor Header with Active File Indicator */}
-                <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                      TRAINER
-                    </span>
-                    <span className="text-xs text-muted-foreground">Active:</span>
-                    <span className="text-xs font-medium text-primary flex items-center gap-1">
-                      <File className="h-3 w-3" />
-                      {activeFileName}
-                    </span>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
-                      className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      {SUPPORTED_LANGUAGES.map((lang) => (
-                        <option key={lang.id} value={lang.id}>
-                          {lang.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSaveCode}
-                      disabled={savingCode}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-                        saveSuccess 
-                          ? "bg-green-500/20 border-green-500 text-green-700 dark:text-green-400" 
-                          : "bg-background hover:bg-accent",
-                        savingCode && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {savingCode ? (
-                        <>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Saving...
-                        </>
-                      ) : saveSuccess ? (
-                        <>
-                          <CheckCircle className="h-3 w-3" />
-                          Saved!
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-3 w-3" />
-                          Save & Sync
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setShowAI(!showAI)}
-                      className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      {showAI ? 'Hide AI' : 'AI Help'}
-                    </button>
-                  </div>
-                </div>
+                {/* Editor Header */}
+                <WorkspaceEditorHeader
+                  role="trainer"
+                  fileName={activeFileName}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  onSave={handleSaveCode}
+                  savingCode={savingCode}
+                  saveSuccess={saveSuccess}
+                  showAI={showAI}
+                  onToggleAI={() => setShowAI(!showAI)}
+                />
                 <WorkspaceEditor
                   fileId={selectedFile.id}
                   fileName={selectedFile.name}
@@ -1028,7 +717,7 @@ export function TrainerSessionWorkspace({
                   onChange={setCode}
                   onRun={handleRun}
                   executing={executing}
-                  onSave={handleFileSaved}
+                  onSave={() => setRefreshKey((prev) => prev + 1)}
                   hideSaveButton={true}
                   runDisabled={code !== lastSavedCode}
                 />
@@ -1045,7 +734,7 @@ export function TrainerSessionWorkspace({
               <OutputPanel
                 result={executionResult}
                 executing={executing}
-                onClear={() => setExecutionResult(null)}
+                onClear={clearResult}
               />
             </OutputPanelWrapper>
           }

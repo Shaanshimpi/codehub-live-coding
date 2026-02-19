@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { AIAssistantPanelWrapper } from './AIAssistantPanelWrapper'
 
 interface WorkspaceModeLayoutProps {
   /** Left column: File Explorer */
@@ -51,7 +52,7 @@ export function WorkspaceModeLayout({
       {/* Left: File Explorer */}
       {showFileExplorer && fileExplorer && (
         <div 
-          className="w-64 border-r bg-muted/30 overflow-hidden"
+          className="flex-shrink-0 w-64 border-r bg-muted/30 overflow-hidden"
           data-testid="file-explorer-column"
         >
           {fileExplorer}
@@ -60,13 +61,7 @@ export function WorkspaceModeLayout({
 
       {/* Center: Editor */}
       <div
-        className={`flex flex-1 flex-col overflow-hidden ${
-          showAI
-            ? showFileExplorer && showOutput
-              ? 'max-w-[50%]'
-              : 'max-w-[65%]'
-            : ''
-        }`}
+        className="flex flex-1 flex-col overflow-hidden min-w-0"
         data-testid="editor-column"
       >
         {editor}
@@ -75,7 +70,7 @@ export function WorkspaceModeLayout({
       {/* Right: Output + AI */}
       {showOutput && outputPanel && (
         <div 
-          className={`flex flex-col gap-2 border-l bg-muted/30 p-2 ${showAI ? 'w-64' : 'w-80'}`}
+          className={`flex flex-col gap-2 border-l bg-muted/30 p-2 h-full overflow-hidden flex-shrink-0 ${showAI ? 'w-64' : 'w-80'}`}
           data-testid="panels-column"
         >
           {outputPanel}
@@ -84,12 +79,9 @@ export function WorkspaceModeLayout({
 
       {/* AI Assistant Panel (full width when output is hidden) */}
       {showAI && aiPanel && (
-        <div 
-          className="w-[35%] border-l bg-muted/30 p-2"
-          data-testid="ai-panel-column"
-        >
+        <AIAssistantPanelWrapper data-testid="ai-panel-column">
           {aiPanel}
-        </div>
+        </AIAssistantPanelWrapper>
       )}
     </div>
   )

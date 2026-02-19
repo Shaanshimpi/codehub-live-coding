@@ -14,6 +14,7 @@ interface AIAssistantPanelWrapperProps {
 /**
  * Shared wrapper component for AI Assistant Panel.
  * Provides consistent styling and structure across all workspace views.
+ * Ensures proper height and layout to prevent shortened appearance.
  */
 export function AIAssistantPanelWrapper({
   children,
@@ -22,7 +23,7 @@ export function AIAssistantPanelWrapper({
 }: AIAssistantPanelWrapperProps) {
   return (
     <div 
-      className={`w-[35%] border-l bg-muted/30 p-2 ${className}`}
+      className={`flex flex-col flex-shrink-0 w-[400px] min-w-[350px] border-l bg-muted/30 p-2 h-full overflow-hidden ${className}`}
       data-testid={testId}
     >
       {children}

@@ -11,6 +11,8 @@ interface UseFileSaveOptions {
   syncToSession?: boolean
   /** Session sync endpoint type: 'broadcast' for trainer, 'scratchpad' for student */
   sessionSyncType?: 'broadcast' | 'scratchpad'
+  /** Optional workspace file name (for scratchpad sync) */
+  workspaceFileName?: string
 }
 
 interface UseFileSaveReturn {
@@ -64,10 +66,13 @@ export function useFileSave(options: UseFileSaveOptions = {}): UseFileSaveReturn
             options.sessionSyncType === 'scratchpad'
               ? {
                   workspaceFileId: fileId,
+                  workspaceFileName: options.workspaceFileName || '',
+                  code: content,
                   language,
                 }
               : {
                   workspaceFileId: fileId,
+                  workspaceFileName: options.workspaceFileName || '',
                   languageSlug: language,
                 }
 
@@ -107,7 +112,7 @@ export function useFileSave(options: UseFileSaveOptions = {}): UseFileSaveReturn
         setSaving(false)
       }
     },
-    [options.sessionCode, options.syncToSession, options.sessionSyncType, options.onSaveComplete, options.onSaveError]
+    [options.sessionCode, options.syncToSession, options.sessionSyncType, options.workspaceFileName, options.onSaveComplete, options.onSaveError]
   )
 
   const resetSaveSuccess = useCallback(() => {

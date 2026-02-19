@@ -7,6 +7,7 @@ import type {
   AIAssistantRequest,
   AIAssistantResponse,
   AIMessage,
+  ResponseStyle,
 } from '@/types/ai-assistant'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -46,7 +47,32 @@ export function AIAssistantPanel({
     scrollToBottom()
   }, [messages])
 
-  const sendRequest = async (type: AIRequestType, customMessage?: string) => {
+  const getResponseMode = (type: AIRequestType, customMessage?: string): ResponseStyle => {
+    // Map request types to response modes based on UI buttons:
+    // "Explain This" → visual (show code frames nicely)
+    // "Need Help?" → visual (debug with code frames)
+    // "Give Hint" → hint-only (short hints)
+    // "Explain Concepts" → full-explain (detailed concepts)
+    
+    if (type === 'explain-code') return 'visual' // "Explain This" button
+    if (type === 'debug-error') return 'visual'   // "Need Help?" button
+    if (type === 'improve-code') return 'full-explain'
+    if (type === 'generate-tests') return 'strict'
+
+    if (type === 'answer-question') {
+      const msg = (customMessage || '').toLowerCase()
+      if (msg.includes('hint')) return 'hint-only'        // "Give Hint" button
+      if (msg.includes('concept') || msg.includes('concepts')) return 'full-explain' // "Explain Concepts" button
+    }
+
+    return 'strict' // Default fallback
+  }
+
+  const sendRequest = async (
+    type: AIRequestType,
+    customMessage?: string,
+    responseModeOverride?: ResponseStyle,
+  ) => {
     setIsLoading(true)
 
     // Add user message to chat
@@ -60,6 +86,9 @@ export function AIAssistantPanel({
     }
 
     try {
+      const responseMode = responseModeOverride || getResponseMode(type, customMessage)
+      console.log('[AIAssistantPanel] Request type:', type, '→ responseMode:', responseMode, 'customMessage:', customMessage?.substring(0, 50))
+
       const request: AIAssistantRequest = {
         type,
         user: {
@@ -79,8 +108,11 @@ export function AIAssistantPanel({
           input,
         },
         message: customMessage,
+        // Phase 3: Response mode for optimized prompts and token limits
+        responseMode,
       }
 
+      console.log('[AIAssistantPanel] Sending request to /api/ai/live-assistant...')
       const response = await fetch('/api/ai/live-assistant', {
         method: 'POST',
         headers: {
@@ -89,7 +121,10 @@ export function AIAssistantPanel({
         body: JSON.stringify(request),
       })
 
+      console.log('[AIAssistantPanel] Response status:', response.status)
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[AIAssistantPanel] Error response:', errorText)
         throw new Error(`AI request failed: ${response.status}`)
       }
 
@@ -110,6 +145,10 @@ export function AIAssistantPanel({
   }
 
   const handleQuickAction = (type: AIRequestType) => {
+    // Quick actions use getResponseMode() which maps:
+    // - "Explain This" (explain-code) → visual
+    // - "Need Help?" (debug-error) → visual
+    // No override needed, getResponseMode handles it
     sendRequest(type)
   }
 
@@ -144,7 +183,7 @@ export function AIAssistantPanel({
         </button>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - Standardized across all workspaces */}
       <div className="grid grid-cols-2 gap-2 border-b bg-muted/10 p-2">
         <button
           onClick={() => handleQuickAction('explain-code')}
@@ -152,7 +191,7 @@ export function AIAssistantPanel({
           className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
         >
           <Code className="h-3 w-3" />
-          <span>{role === 'student' ? 'Explain This' : 'Explain Code'}</span>
+          <span>Explain Code</span>
         </button>
         <button
           onClick={() => handleQuickAction('debug-error')}
@@ -160,44 +199,42 @@ export function AIAssistantPanel({
           className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
         >
           <Bug className="h-3 w-3" />
-          <span>{role === 'student' ? 'Need Help?' : 'Debug Error'}</span>
+          <span>Debug Error</span>
         </button>
         <button
           onClick={() =>
             sendRequest(
               'answer-question',
-              role === 'student'
-                ? 'Can you give me a hint about what I should do next?'
-                : 'What teaching points should I emphasize?',
+              'Can you give me a hint about what I should do next?',
+              'hint-only',
             )
           }
           disabled={isLoading}
           className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
         >
           <Sparkles className="h-3 w-3" />
-          <span>{role === 'student' ? 'Give Hint' : 'Teaching Tips'}</span>
+          <span>Give Hint</span>
         </button>
         <button
           onClick={() =>
             sendRequest(
               'answer-question',
-              role === 'student'
-                ? 'Can you explain the concepts I need to understand for this code?'
-                : 'What common mistakes should I watch for?',
+              'Can you explain the concepts I need to understand for this code?',
+              'full-explain',
             )
           }
           disabled={isLoading}
           className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
         >
           <Zap className="h-3 w-3" />
-          <span>{role === 'student' ? 'Explain Concepts' : 'Common Mistakes'}</span>
+          <span>Explain Concepts</span>
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center text-center text-sm text-muted-foreground min-h-full">
             <div>
               <Sparkles className="mx-auto mb-2 h-8 w-8 opacity-50" />
               {role === 'student' ? (
@@ -280,7 +317,7 @@ export function AIAssistantPanel({
       </div>
 
       {/* Input */}
-      <div className="border-t bg-muted/10 p-2">
+      <div className="flex-shrink-0 border-t bg-muted/10 p-2">
         <div className="flex gap-2">
           <textarea
             value={inputMessage}

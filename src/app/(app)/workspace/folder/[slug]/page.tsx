@@ -17,7 +17,7 @@ export default async function FolderWorkspacePage({ params }: PageProps) {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <WorkspaceLayout scopeFolderSlug={slug} />
+      <WorkspaceLayout scopeFolderId={slug} />
     </div>
   )
 }

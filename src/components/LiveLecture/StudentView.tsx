@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { LiveCodePlayground, SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
 import { AIAssistantPanel } from '@/components/AIAssistant'
+import { AIAssistantPanelWrapper } from '@/components/Workspace/AIAssistantPanelWrapper'
 import { Eye, Code, RefreshCw, Bell } from 'lucide-react'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import {
@@ -276,7 +277,7 @@ export function StudentView({ lectureId }: StudentViewProps) {
 
             {/* AI Assistant Panel (conditional) */}
             {showAI && (
-              <div className="flex w-[35%] flex-col">
+              <AIAssistantPanelWrapper>
                 <AIAssistantPanel
                   role="student"
                   lectureId={lectureId}
@@ -289,12 +290,12 @@ export function StudentView({ lectureId }: StudentViewProps) {
                     setShowAI(false)
                   }}
                 />
-              </div>
+              </AIAssistantPanelWrapper>
             )}
 
             {/* Student's output */}
             <div
-              className={`flex flex-col rounded-lg border border-success/50 bg-card overflow-hidden ${showAI ? 'w-64' : 'w-80'}`}
+              className={`flex flex-col rounded-lg border border-success/50 bg-card overflow-hidden h-full ${showAI ? 'w-64' : 'w-80'}`}
             >
               <div className="border-b bg-success/10 px-3 py-1.5">
                 <h2 className="text-xs font-medium text-success">Your Output</h2>

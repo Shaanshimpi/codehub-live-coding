@@ -2,11 +2,9 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { X, File, FilePlus, Loader2 } from 'lucide-react'
+import type { WorkspaceFileFull } from '@/types/workspace'
 
-interface WorkspaceFile {
-  id: string
-  name: string
-  content: string
+interface WorkspaceFile extends WorkspaceFileFull {
   language: string
   updatedAt: string
   folderPath?: string

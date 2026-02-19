@@ -4,21 +4,9 @@ import React, { useEffect, useState, useCallback } from 'react'
 
 import { FolderExplorerView } from '@/components/Workspace/FolderExplorerView'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
+import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
-type Folder = BasicFolderRef & {
-  parentFolder?: BasicFolderRef | null
-  slug?: string | null
-}
-
-type WorkspaceFile = {
-  id: string
-  name: string
-  folder?: {
-    id: string | number
-    name?: string | null
-    slug?: string | null
-  } | null
-}
+type WorkspaceFile = WorkspaceFileWithFolder
 
 interface FolderExplorerPageClientProps {
   slug: string
