@@ -24,6 +24,7 @@ export function LiveCodePlayground({
   allowRunInReadOnly = false,
 }: LiveCodePlaygroundProps) {
   const editorRef = useRef<any>(null)
+  const executedCodeRef = useRef<string>('') // Track the code that was executed
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
   const [fontSize, setFontSize] = useState<number>(14)
@@ -41,6 +42,8 @@ export function LiveCodePlayground({
     if (runDisabled) return // Prevent running if disabled
     // Get current code from editor to avoid stale state
     const currentCode = editorRef.current?.getValue() || code
+    // Store the code that's being executed
+    executedCodeRef.current = currentCode
     onRun(currentCode, showInput ? input : undefined)
   }, [code, input, showInput, onRun, runDisabled])
 
@@ -83,7 +86,7 @@ export function LiveCodePlayground({
         selectionHighlight: false,
       })
     }
-  }, [readOnly, executing, handleRun, monaco])
+  }, [readOnly, executing, handleRun, monaco, allowRunInReadOnly, runDisabled])
 
   const handleStop = useCallback(() => {
     if (onStopExecution) {
@@ -144,6 +147,21 @@ export function LiveCodePlayground({
       return
     }
 
+    // Get current code from editor
+    const currentCode = editor.getValue?.() || code
+
+    // Only show markers if the code hasn't changed since execution
+    // If user has typed/changed code, clear markers
+    if (currentCode !== executedCodeRef.current) {
+      console.log('[Monaco Debug] Code changed, clearing markers', {
+        currentCodeLength: currentCode.length,
+        executedCodeLength: executedCodeRef.current.length,
+        codesMatch: currentCode === executedCodeRef.current
+      })
+      monaco.editor.setModelMarkers(model, 'syntax-error', [])
+      return
+    }
+
     // Clear markers when there is no result or success
     if (!executionResult || executionResult.status === 'success') {
       monaco.editor.setModelMarkers(model, 'syntax-error', [])
@@ -197,12 +215,22 @@ export function LiveCodePlayground({
     ]
 
     try {
+      console.log('[Monaco Debug] Setting error markers', {
+        line,
+        column,
+        message: message.substring(0, 50),
+        currentCodeLength: currentCode.length,
+        executedCodeLength: executedCodeRef.current.length,
+        codesMatch: currentCode === executedCodeRef.current
+      })
       monaco.editor.setModelMarkers(model, 'syntax-error', markers)
       editor.revealLineInCenter?.(line)
+      const currentMarkers = monaco.editor.getModelMarkers({ resource: model.uri })
+      console.log('[Monaco Debug] Markers after setting:', currentMarkers.length, currentMarkers)
     } catch (error) {
       console.error('[MonacoMarkers] Error setting markers:', error)
     }
-  }, [executionResult, language, monaco])
+  }, [executionResult, language, monaco, code])
 
   // Update Monaco theme when app theme changes
   useEffect(() => {
@@ -215,6 +243,56 @@ export function LiveCodePlayground({
       }
     }
   }, [appTheme, monaco, themeProp])
+
+  // Set up listener to clear error markers when content changes
+  useEffect(() => {
+    if (!monaco || !editorRef.current) {
+      console.log('[Monaco Debug] Listener setup skipped: monaco or editor not available', {
+        hasMonaco: !!monaco,
+        hasEditor: !!editorRef.current
+      })
+      return
+    }
+
+    const editor = editorRef.current
+    const model = editor.getModel?.() || (editor as any).getModel()
+    
+    if (!model) {
+      console.log('[Monaco Debug] Listener setup skipped: model not available')
+      return
+    }
+
+    console.log('[Monaco Debug] Setting up onDidChangeContent listener', {
+      modelUri: model.uri?.toString(),
+      language: model.getLanguageId?.()
+    })
+
+    // Clear error markers when content changes
+    const disposable = model.onDidChangeContent((e: any) => {
+      console.log('[Monaco Debug] onDidChangeContent fired', {
+        changes: e.changes,
+        versionId: e.versionId,
+        isUndoing: e.isUndoing,
+        isRedoing: e.isRedoing
+      })
+      if (monaco && model) {
+        console.log('[Monaco Debug] Clearing markers via onDidChangeContent')
+        // Clear markers immediately when user types
+        monaco.editor.setModelMarkers(model, 'syntax-error', [])
+        // Also clear the executed code ref so markers won't be re-set
+        executedCodeRef.current = ''
+        console.log('[Monaco Debug] Markers cleared, executedCodeRef reset')
+      } else {
+        console.log('[Monaco Debug] onDidChangeContent: monaco or model not available', { monaco: !!monaco, model: !!model })
+      }
+    })
+
+    return () => {
+      if (disposable && typeof disposable.dispose === 'function') {
+        disposable.dispose()
+      }
+    }
+  }, [monaco]) // Only set up once when monaco is available
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -338,7 +416,30 @@ export function LiveCodePlayground({
           height={height}
           language={monacoLanguage}
           value={code}
-          onChange={(value) => onChange(value || '')}
+          onChange={(value) => {
+            const newValue = value || ''
+            console.log('[Monaco Debug] onChange fired', {
+              valueLength: newValue.length,
+              hasMonaco: !!monaco,
+              hasEditorRef: !!editorRef.current
+            })
+            // Clear error markers when user types or makes changes
+            if (monaco && editorRef.current) {
+              const editor = editorRef.current
+              const model = editor.getModel?.() || (editor as any).getModel()
+              if (model) {
+                console.log('[Monaco Debug] Clearing markers via onChange')
+                monaco.editor.setModelMarkers(model, 'syntax-error', [])
+                const currentMarkers = monaco.editor.getModelMarkers({ resource: model.uri })
+                console.log('[Monaco Debug] Markers after clearing:', currentMarkers.length)
+              } else {
+                console.log('[Monaco Debug] onChange: model not available')
+              }
+            } else {
+              console.log('[Monaco Debug] onChange: monaco or editorRef not available')
+            }
+            onChange(newValue)
+          }}
           onMount={handleEditorDidMount}
           theme={monacoTheme}
           options={{

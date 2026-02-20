@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       fees.docs.forEach((fee) => {
         if (fee.installments && Array.isArray(fee.installments)) {
           fee.installments.forEach((installment: any) => {
-            if (!installment.isPaid) {
+            if (installment.isPaid !== true) {
               const dueDate = new Date(installment.dueDate)
               if (dueDate < now) {
                 overduePayments++

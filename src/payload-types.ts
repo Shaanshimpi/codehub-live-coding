@@ -478,6 +478,10 @@ export interface User {
    * Mark when student confirms admission after trial
    */
   isAdmissionConfirmed?: boolean | null;
+  /**
+   * Temporarily grant access to this student, overriding all other access rules
+   */
+  temporaryAccessGranted?: boolean | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -1641,6 +1645,7 @@ export interface UsersSelect<T extends boolean = true> {
   trialStartDate?: T;
   trialEndDate?: T;
   isAdmissionConfirmed?: T;
+  temporaryAccessGranted?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

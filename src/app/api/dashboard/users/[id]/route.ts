@@ -157,6 +157,7 @@ export async function PATCH(
     if (body.trialStartDate !== undefined) updateData.trialStartDate = body.trialStartDate || null
     if (body.trialEndDate !== undefined) updateData.trialEndDate = body.trialEndDate || null
     if (body.isAdmissionConfirmed !== undefined) updateData.isAdmissionConfirmed = body.isAdmissionConfirmed
+    if (body.temporaryAccessGranted !== undefined) updateData.temporaryAccessGranted = body.temporaryAccessGranted
 
     // Update user
     const updatedUser = await payload.update({

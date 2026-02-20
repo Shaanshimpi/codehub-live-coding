@@ -1,13 +1,11 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Sparkles, Send, X, Code, Bug, Zap, TestTube, Loader2 } from 'lucide-react'
+import { Sparkles, Send, X, Loader2 } from 'lucide-react'
 import type {
-  AIRequestType,
   AIAssistantRequest,
   AIAssistantResponse,
   AIMessage,
-  ResponseStyle,
 } from '@/types/ai-assistant'
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -47,52 +45,24 @@ export function AIAssistantPanel({
     scrollToBottom()
   }, [messages])
 
-  const getResponseMode = (type: AIRequestType, customMessage?: string): ResponseStyle => {
-    // Map request types to response modes based on UI buttons:
-    // "Explain This" → visual (show code frames nicely)
-    // "Need Help?" → visual (debug with code frames)
-    // "Give Hint" → hint-only (short hints)
-    // "Explain Concepts" → full-explain (detailed concepts)
-    
-    if (type === 'explain-code') return 'visual' // "Explain This" button
-    if (type === 'debug-error') return 'visual'   // "Need Help?" button
-    if (type === 'improve-code') return 'full-explain'
-    if (type === 'generate-tests') return 'strict'
+  const sendMessage = async () => {
+    if (!inputMessage.trim() || isLoading) return
 
-    if (type === 'answer-question') {
-      const msg = (customMessage || '').toLowerCase()
-      if (msg.includes('hint')) return 'hint-only'        // "Give Hint" button
-      if (msg.includes('concept') || msg.includes('concepts')) return 'full-explain' // "Explain Concepts" button
+    const userMessage: AIMessage = {
+      role: 'user',
+      content: inputMessage.trim(),
+      timestamp: new Date(),
     }
 
-    return 'strict' // Default fallback
-  }
-
-  const sendRequest = async (
-    type: AIRequestType,
-    customMessage?: string,
-    responseModeOverride?: ResponseStyle,
-  ) => {
+    setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
-
-    // Add user message to chat
-    if (customMessage) {
-      const userMessage: AIMessage = {
-        role: 'user',
-        content: customMessage,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, userMessage])
-    }
+    setInputMessage('')
 
     try {
-      const responseMode = responseModeOverride || getResponseMode(type, customMessage)
-      console.log('[AIAssistantPanel] Request type:', type, '→ responseMode:', responseMode, 'customMessage:', customMessage?.substring(0, 50))
-
       const request: AIAssistantRequest = {
-        type,
+        type: 'answer-question',
         user: {
-          id: 'user-1', // TODO: Get from auth
+          id: 'user-1',
           name: role === 'trainer' ? 'Trainer' : 'Student',
           role,
         },
@@ -107,12 +77,9 @@ export function AIAssistantPanel({
           output,
           input,
         },
-        message: customMessage,
-        // Phase 3: Response mode for optimized prompts and token limits
-        responseMode,
+        message: userMessage.content,
       }
 
-      console.log('[AIAssistantPanel] Sending request to /api/ai/live-assistant...')
       const response = await fetch('/api/ai/live-assistant', {
         method: 'POST',
         headers: {
@@ -121,11 +88,8 @@ export function AIAssistantPanel({
         body: JSON.stringify(request),
       })
 
-      console.log('[AIAssistantPanel] Response status:', response.status)
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[AIAssistantPanel] Error response:', errorText)
-        throw new Error(`AI request failed: ${response.status}`)
+        throw new Error(`Request failed: ${response.status}`)
       }
 
       const data: AIAssistantResponse = await response.json()
@@ -134,34 +98,19 @@ export function AIAssistantPanel({
       console.error('AI request error:', error)
       const errorMessage: AIMessage = {
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
-      setInputMessage('')
-    }
-  }
-
-  const handleQuickAction = (type: AIRequestType) => {
-    // Quick actions use getResponseMode() which maps:
-    // - "Explain This" (explain-code) → visual
-    // - "Need Help?" (debug-error) → visual
-    // No override needed, getResponseMode handles it
-    sendRequest(type)
-  }
-
-  const handleSendMessage = () => {
-    if (inputMessage.trim()) {
-      sendRequest('answer-question', inputMessage.trim())
     }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+      sendMessage()
     }
   }
 
@@ -183,54 +132,6 @@ export function AIAssistantPanel({
         </button>
       </div>
 
-      {/* Quick Actions - Standardized across all workspaces */}
-      <div className="grid grid-cols-2 gap-2 border-b bg-muted/10 p-2">
-        <button
-          onClick={() => handleQuickAction('explain-code')}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
-        >
-          <Code className="h-3 w-3" />
-          <span>Explain Code</span>
-        </button>
-        <button
-          onClick={() => handleQuickAction('debug-error')}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
-        >
-          <Bug className="h-3 w-3" />
-          <span>Debug Error</span>
-        </button>
-        <button
-          onClick={() =>
-            sendRequest(
-              'answer-question',
-              'Can you give me a hint about what I should do next?',
-              'hint-only',
-            )
-          }
-          disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
-        >
-          <Sparkles className="h-3 w-3" />
-          <span>Give Hint</span>
-        </button>
-        <button
-          onClick={() =>
-            sendRequest(
-              'answer-question',
-              'Can you explain the concepts I need to understand for this code?',
-              'full-explain',
-            )
-          }
-          disabled={isLoading}
-          className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50"
-        >
-          <Zap className="h-3 w-3" />
-          <span>Explain Concepts</span>
-        </button>
-      </div>
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
@@ -241,10 +142,10 @@ export function AIAssistantPanel({
                 <>
                   <p className="font-medium">Hi! I&apos;m your coding tutor 👋</p>
                   <p className="text-xs mt-2">
-                    I won&apos;t give you the answers directly, but I&apos;ll guide you!
+                    Ask me anything about your code - errors, concepts, or how things work!
                   </p>
                   <p className="text-xs mt-1">
-                    Ask me about errors, concepts, or request hints
+                    I&apos;ll explain things clearly and help you learn.
                   </p>
                 </>
               ) : (
@@ -276,8 +177,7 @@ export function AIAssistantPanel({
                   code({ node, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '')
                     const isInline = !match
-                    
-                    // Remove ref from props as it causes type conflicts with SyntaxHighlighter
+
                     const { ref, ...rest } = props as any
 
                     return !isInline ? (
@@ -317,7 +217,7 @@ export function AIAssistantPanel({
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t bg-muted/10 p-2">
+      <div className="shrink-0 border-t bg-muted/10 p-2">
         <div className="flex gap-2">
           <textarea
             value={inputMessage}
@@ -325,7 +225,7 @@ export function AIAssistantPanel({
             onKeyPress={handleKeyPress}
             placeholder={
               role === 'student'
-                ? "Ask for help, hints, or explanations..."
+                ? "Ask about your code, errors, or concepts..."
                 : "Ask about teaching strategies, explanations..."
             }
             className="flex-1 resize-none rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
@@ -333,7 +233,7 @@ export function AIAssistantPanel({
             disabled={isLoading}
           />
           <button
-            onClick={handleSendMessage}
+            onClick={sendMessage}
             disabled={isLoading || !inputMessage.trim()}
             className="flex items-center justify-center rounded-md bg-primary px-3 text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
@@ -344,4 +244,3 @@ export function AIAssistantPanel({
     </div>
   )
 }
-

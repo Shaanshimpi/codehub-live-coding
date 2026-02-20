@@ -8,9 +8,26 @@ import type { Theme } from '@/providers/Theme/types'
 
 export function FloatingLogout() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [currentTheme, setCurrentTheme] = useState<Theme>('light')
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/users/me', {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        setIsLoggedIn(res.ok)
+      } catch (error) {
+        setIsLoggedIn(false)
+      }
+    }
+    checkAuth()
+  }, [])
 
   // Get current theme from DOM or localStorage
   useEffect(() => {
@@ -74,7 +91,7 @@ export function FloatingLogout() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3">
+    <div className="fixed bottom-6 left-6 z-[9999] flex items-center gap-3">
       {/* Theme Switcher */}
       <button
         onClick={toggleTheme}
@@ -89,17 +106,19 @@ export function FloatingLogout() {
         )}
       </button>
 
-      {/* Logout Button */}
-      <button
-        onClick={handleLogout}
-        disabled={isLoading}
-        className="flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-2xl hover:bg-primary/90 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-primary-foreground/20"
-        title="Logout"
-        aria-label="Logout"
-      >
-        <LogOut className="h-4 w-4" />
-        <span className="text-sm font-medium">{isLoading ? 'Logging out...' : 'Logout'}</span>
-      </button>
+      {/* Logout Button - Only show when logged in */}
+      {isLoggedIn && (
+        <button
+          onClick={handleLogout}
+          disabled={isLoading}
+          className="flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-2xl hover:bg-primary/90 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-primary-foreground/20"
+          title="Logout"
+          aria-label="Logout"
+        >
+          <LogOut className="h-4 w-4" />
+          <span className="text-sm font-medium">{isLoading ? 'Logging out...' : 'Logout'}</span>
+        </button>
+      )}
     </div>
   )
 }

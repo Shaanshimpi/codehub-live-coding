@@ -5,11 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Radio, Play } from 'lucide-react'
 import { ActiveSessionsList } from '@/components/Session/ActiveSessionsList'
 
-interface Language {
-  id: string
-  name: string
-}
-
 interface MeResponse {
   user?: {
     id: string
@@ -21,8 +16,6 @@ interface MeResponse {
 export function TrainerStartClient() {
   const router = useRouter()
   const [title, setTitle] = useState('')
-  const [languages, setLanguages] = useState<Language[]>([])
-  const [languageId, setLanguageId] = useState<string>('')
   const [me, setMe] = useState<MeResponse['user'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -37,19 +30,9 @@ export function TrainerStartClient() {
           const meData = await meRes.json()
           setMe(meData.user || null)
         }
-
-        const langRes = await fetch('/api/languages?limit=100', { cache: 'no-store' })
-        if (langRes.ok) {
-          const langData = await langRes.json()
-          const docs: Language[] = langData.docs || []
-          setLanguages(docs)
-          if (docs.length > 0) {
-            setLanguageId(docs[0].id)
-          }
-        }
       } catch (e) {
         console.error('Error loading trainer start data', e)
-        setError('Failed to load languages or user info')
+        setError('Failed to load user info')
       } finally {
         setLoading(false)
       }
@@ -82,7 +65,6 @@ export function TrainerStartClient() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          languageId: languageId || undefined,
         }),
       })
 
@@ -133,27 +115,6 @@ export function TrainerStartClient() {
                 className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 disabled={loading || submitting}
               />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">Language</label>
-              <select
-                value={languageId}
-                onChange={(e) => setLanguageId(e.target.value)}
-                className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                disabled={loading || submitting || languages.length === 0}
-              >
-                {languages.map((lang) => (
-                  <option key={lang.id} value={lang.id}>
-                    {lang.name}
-                  </option>
-                ))}
-              </select>
-              {languages.length === 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  No languages found. Add some in the admin under <strong>Languages</strong>.
-                </p>
-              )}
             </div>
 
             {error && (

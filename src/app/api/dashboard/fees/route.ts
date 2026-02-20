@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
           )
 
           // Find next unpaid installment
-          const nextUnpaid = sortedInstallments.find((inst) => !inst.isPaid)
+          const nextUnpaid = sortedInstallments.find((inst) => inst.isPaid !== true)
           if (nextUnpaid) {
             nextDueDate = nextUnpaid.dueDate
             nextDueAmount = nextUnpaid.amount

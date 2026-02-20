@@ -4,6 +4,7 @@ import config from '@payload-config'
 import { getMeUser } from '@/auth/getMeUser'
 import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
 import { hasFullAccess } from '@/utilities/dashboardAccess'
+import { getAccessStatus } from '@/utilities/accessStatus'
 
 /**
  * GET /api/dashboard/users
@@ -65,6 +66,11 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    // Fetch platform settings for access status calculation
+    const settings = await payload.findGlobal({
+      slug: 'platform-settings',
+    })
+
     // Fetch users
     // Use overrideAccess: true because we've already checked authorization at API level
     // Trainers need to see all users for dashboard, even though collection access restricts them
@@ -103,7 +109,7 @@ export async function GET(request: NextRequest) {
             (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
           )
           
-          const nextUnpaid = sortedInstallments.find((inst) => !inst.isPaid)
+          const nextUnpaid = sortedInstallments.find((inst) => inst.isPaid !== true)
           if (nextUnpaid) {
             feesMap.set(studentId, { nextDueDate: nextUnpaid.dueDate })
           } else {
@@ -119,7 +125,7 @@ export async function GET(request: NextRequest) {
     // Format response (exclude sensitive fields)
     const formattedUsers = users.docs.map((userDoc) => {
       const feeInfo = feesMap.get(userDoc.id)
-      return {
+      const userData = {
         id: userDoc.id,
         name: userDoc.name,
         email: userDoc.email,
@@ -129,8 +135,26 @@ export async function GET(request: NextRequest) {
         isAdmissionConfirmed: userDoc.isAdmissionConfirmed || false,
         trialEndDate: userDoc.trialEndDate || null,
         nextPaymentDueDate: feeInfo?.nextDueDate || null,
+        temporaryAccessGranted: (userDoc as any).temporaryAccessGranted || false,
         createdAt: userDoc.createdAt,
         updatedAt: userDoc.updatedAt,
+      }
+      
+      // Calculate access status using the same logic as frontend
+      const accessStatus = getAccessStatus(
+        {
+          role: userDoc.role,
+          isAdmissionConfirmed: userDoc.isAdmissionConfirmed || false,
+          trialEndDate: userDoc.trialEndDate || null,
+          nextPaymentDueDate: feeInfo?.nextDueDate || null,
+          temporaryAccessGranted: (userDoc as any).temporaryAccessGranted || false,
+        },
+        settings || null
+      )
+      
+      return {
+        ...userData,
+        accessStatus,
       }
     })
 

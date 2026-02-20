@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
+import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, CheckCircle, Unlock, Lock } from 'lucide-react'
 import { hasFullAccess } from '@/utilities/dashboardAccess'
 import type { User } from '@/payload-types'
 
@@ -17,6 +17,8 @@ interface UserListItem {
   isAdmissionConfirmed?: boolean
   trialEndDate?: string | null
   nextPaymentDueDate?: string | null
+  temporaryAccessGranted?: boolean
+  accessStatus?: 'trial' | 'grace' | 'granted' | 'restricted' | 'warning'
   createdAt: string
   updatedAt: string
 }
@@ -42,6 +44,7 @@ export function UsersListClient() {
   const [totalDocs, setTotalDocs] = useState(0)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [admittingId, setAdmittingId] = useState<number | null>(null)
+  const [togglingAccessId, setTogglingAccessId] = useState<number | null>(null)
 
   const limit = 20
 
@@ -171,6 +174,34 @@ export function UsersListClient() {
     }
   }
 
+  const handleToggleTemporaryAccess = async (userId: number, currentStatus: boolean) => {
+    try {
+      setTogglingAccessId(userId)
+      const res = await fetch(`/api/dashboard/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          temporaryAccessGranted: !currentStatus,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to toggle temporary access')
+      }
+
+      // Refresh list
+      fetchUsers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to toggle temporary access')
+    } finally {
+      setTogglingAccessId(null)
+    }
+  }
+
   const canEdit = currentUser ? hasFullAccess(currentUser) : false
 
   const roleColors = {
@@ -178,6 +209,14 @@ export function UsersListClient() {
     manager: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
     trainer: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
     student: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  }
+
+  const accessStatusColors = {
+    trial: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    warning: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    grace: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    granted: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    restricted: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   }
 
   return (
@@ -260,6 +299,7 @@ export function UsersListClient() {
                         <th className="px-4 py-3 text-left text-sm font-medium">Name</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Email</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Role</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Access</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Phone</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">College</th>
                         <th className="px-4 py-3 text-left text-sm font-medium">Trial End Date</th>
@@ -283,6 +323,17 @@ export function UsersListClient() {
                             >
                               {user.role}
                             </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {user.accessStatus ? (
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium capitalize ${accessStatusColors[user.accessStatus]}`}
+                              >
+                                {user.accessStatus}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">N/A</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">
                             {user.phone || 'N/A'}
@@ -347,6 +398,24 @@ export function UsersListClient() {
                                       title="Mark as Admitted"
                                     >
                                       <CheckCircle className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                  {user.role === 'student' && (
+                                    <button
+                                      onClick={() => handleToggleTemporaryAccess(user.id, user.temporaryAccessGranted || false)}
+                                      disabled={togglingAccessId === user.id}
+                                      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+                                        user.temporaryAccessGranted
+                                          ? 'text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-900'
+                                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                                      }`}
+                                      title={user.temporaryAccessGranted ? 'Revoke Temporary Access' : 'Grant Temporary Access'}
+                                    >
+                                      {user.temporaryAccessGranted ? (
+                                        <Unlock className="h-4 w-4" />
+                                      ) : (
+                                        <Lock className="h-4 w-4" />
+                                      )}
                                     </button>
                                   )}
                                   <Link

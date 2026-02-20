@@ -291,7 +291,7 @@ export function FeeDetailClient({ feeId }: FeeDetailClientProps) {
             </thead>
             <tbody className="divide-y">
               {fee.installments.map((installment, index) => {
-                const isOverdue = !installment.isPaid && new Date(installment.dueDate) < new Date()
+                const isOverdue = installment.isPaid !== true && new Date(installment.dueDate) < new Date()
                 return (
                   <tr
                     key={index}
@@ -346,7 +346,7 @@ export function FeeDetailClient({ feeId }: FeeDetailClientProps) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {!installment.isPaid ? (
+                        {installment.isPaid !== true ? (
                           <button
                             onClick={() => {
                               const method = prompt('Enter payment method (optional):')

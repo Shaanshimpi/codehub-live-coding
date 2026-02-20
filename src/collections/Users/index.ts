@@ -176,6 +176,15 @@ export const Users: CollectionConfig = {
         description: 'Mark when student confirms admission after trial',
       },
     },
+    {
+      name: 'temporaryAccessGranted',
+      type: 'checkbox',
+      defaultValue: false,
+      admin: {
+        position: 'sidebar',
+        description: 'Temporarily grant access to this student, overriding all other access rules',
+      },
+    },
   ],
   hooks: {
     beforeChange: [
