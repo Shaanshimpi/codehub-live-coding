@@ -14,7 +14,7 @@
  * @module useFileSelection
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { inferLanguageFromFileName } from '@/utilities/languageInference'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
 import { useFileContent } from './useFileContent'
@@ -83,6 +83,8 @@ export function useFileSelection({
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [switchingFile, setSwitchingFile] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Track the last file ID that triggered onFileChanged to prevent overwriting user edits
+  const lastLoadedFileIdRef = useRef<string | null>(null)
 
   // Use React Query for file content caching
   const { data: fileContent, isLoading: loadingFile } = useFileContent(
@@ -90,7 +92,7 @@ export function useFileSelection({
     { enabled: !!selectedFileId }
   )
 
-  // Update selected file when query completes
+  // Update selected file when query completes, but only call onFileChanged if it's a different file
   useEffect(() => {
     if (fileContent) {
       const newFile: WorkspaceFile = {
@@ -99,13 +101,23 @@ export function useFileSelection({
         content: fileContent.content,
       }
       setSelectedFileState(newFile)
-      if (onFileChanged) {
-        onFileChanged(newFile)
+      
+      // Only call onFileChanged if this is a different file than the last one we loaded
+      // This prevents overwriting user's typed code when React Query refetches the same file
+      if (fileContent.id !== lastLoadedFileIdRef.current) {
+        lastLoadedFileIdRef.current = fileContent.id
+        if (onFileChanged) {
+          onFileChanged(newFile)
+        }
+        console.log('[useFileSelection] File content loaded from cache/query (new file)', {
+          fileId: fileContent.id,
+          fileName: fileContent.name,
+        })
+      } else {
+        console.log('[useFileSelection] File content refetched (same file), skipping onFileChanged to preserve user edits', {
+          fileId: fileContent.id,
+        })
       }
-      console.log('[useFileSelection] File content loaded from cache/query', {
-        fileId: fileContent.id,
-        fileName: fileContent.name,
-      })
     }
   }, [fileContent, onFileChanged])
 
@@ -141,6 +153,8 @@ export function useFileSelection({
       }
       setSelectedFileState(newFile)
       setSelectedFileId(fileIdStr) // Set ID for React Query cache
+      // Reset the ref when explicitly selecting a file
+      lastLoadedFileIdRef.current = fileIdStr
       if (onFileChanged) {
         onFileChanged(newFile)
       }
@@ -150,6 +164,8 @@ export function useFileSelection({
     // Use React Query to fetch file content (will use cache if available)
     console.log('[useFileSelection] Using React Query to fetch file content', { fileId: file.id })
     setSelectedFileId(fileIdStr) // React Query will fetch and cache automatically
+    // Reset the ref when explicitly selecting a file
+    lastLoadedFileIdRef.current = fileIdStr
     // The useEffect above will update selectedFile when query completes
   }, [selectedFile, autoSaveBeforeSwitch, saveCurrentFile, onFileChanged])
 
@@ -184,6 +200,8 @@ export function useFileSelection({
         }
         
         setSelectedFileState(newFile)
+        // Reset the ref when explicitly selecting a file
+        lastLoadedFileIdRef.current = String(fileData.id)
         if (onFileChanged) {
           onFileChanged(newFile)
         }
@@ -203,6 +221,8 @@ export function useFileSelection({
           content: content || '',
         }
         setSelectedFileState(newFile)
+        // Reset the ref when explicitly selecting a file
+        lastLoadedFileIdRef.current = fileIdStr
         if (onFileChanged) {
           onFileChanged(newFile)
         }
@@ -216,6 +236,8 @@ export function useFileSelection({
         content: content || '',
       }
       setSelectedFileState(newFile)
+      // Reset the ref when explicitly selecting a file
+      lastLoadedFileIdRef.current = fileIdStr
       if (onFileChanged) {
         onFileChanged(newFile)
       }
