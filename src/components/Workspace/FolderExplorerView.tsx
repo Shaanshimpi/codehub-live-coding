@@ -45,7 +45,7 @@ interface FolderExplorerViewProps {
   readOnly?: boolean
 }
 
-export function FolderExplorerView({
+export const FolderExplorerView = React.memo(function FolderExplorerView({
   currentFolder,
   childFolders,
   childFiles,
@@ -483,7 +483,7 @@ export function FolderExplorerView({
       )}
     </div>
   )
-}
+})
 
 // Helper component for folder card with actions
 function FolderCard({

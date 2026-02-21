@@ -33,6 +33,7 @@ import { useSaveCode } from '@/hooks/workspace/useSaveCode'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { SessionMetadataModal } from '@/components/Session/SessionMetadataModal'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
+import { useSessionData } from '@/hooks/session/useSessionData'
 
 type WorkspaceFile = WorkspaceFileWithContent
 
@@ -98,7 +99,7 @@ export function TrainerSessionWorkspace({
   // Refs for saveCurrentFile to avoid circular dependency
   const saveCurrentFileRef = useRef<(() => Promise<boolean>) | null>(null)
   // Ref to store latest handleFileSelect to avoid stale closure in useEffect
-  const handleFileSelectRef = useRef<((file: { id: string; name: string; content: string }) => Promise<void>) | null>(null)
+  const handleFileSelectRef = useRef<((file: { id: string; name?: string; content?: string }) => Promise<void>) | null>(null)
 
   // File selection management with auto-save
   const {
@@ -197,50 +198,49 @@ export function TrainerSessionWorkspace({
   const hasAttemptedLoadRef = useRef(false)
 
   // Load active file from session on mount (only once per session)
+  // Use React Query to fetch session data (cached)
+  const { data: sessionData } = useSessionData(sessionCode, {
+    refetchInterval: false, // Don't poll - just get initial data
+    enabled: !!sessionCode,
+  })
+
   useEffect(() => {
     // Don't run if we've already attempted to load or if a file is already selected
-    if (hasAttemptedLoadRef.current || selectedFile) {
+    if (hasAttemptedLoadRef.current || selectedFile || !sessionData) {
       return
     }
 
     const loadActiveFile = async () => {
       hasAttemptedLoadRef.current = true
       try {
-        const res = await fetch(`/api/sessions/${sessionCode}/live`, { cache: 'no-store' })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.trainerWorkspaceFileId) {
-            // Fetch file content
-            const fileRes = await fetch(`/api/files/${data.trainerWorkspaceFileId}`, {
-              credentials: 'include',
-            })
-            if (fileRes.ok) {
-              const fileData = await fileRes.json()
-              // Ensure fileId is a string (Payload returns numbers)
-              const fileIdStr = String(fileData.id)
-              // Trigger file selection - hook's onFileChanged will handle state updates
-              if (handleFileSelectRef.current) {
-                await handleFileSelectRef.current({
-                  id: fileIdStr,
-                  name: fileData.name,
-                  content: fileData.content || '',
-                })
-              }
-              
-              // Set language if provided by API (onFileChanged will infer if not)
-              if (fileData.language) {
-                setLanguage(fileData.language)
-              }
-            } else {
-              // File fetch failed - show modal
-              setShowFileModal(true)
+        if (sessionData.trainerWorkspaceFileId) {
+          // Fetch file content
+          const fileRes = await fetch(`/api/files/${sessionData.trainerWorkspaceFileId}`, {
+            credentials: 'include',
+          })
+          if (fileRes.ok) {
+            const fileData = await fileRes.json()
+            // Ensure fileId is a string (Payload returns numbers)
+            const fileIdStr = String(fileData.id)
+            // Trigger file selection - hook's onFileChanged will handle state updates
+            if (handleFileSelectRef.current) {
+              await handleFileSelectRef.current({
+                id: fileIdStr,
+                name: fileData.name,
+                content: fileData.content || '',
+              })
+            }
+            
+            // Set language if provided by API (onFileChanged will infer if not)
+            if (fileData.language) {
+              setLanguage(fileData.language)
             }
           } else {
-            // No file selected - show modal
+            // File fetch failed - show modal
             setShowFileModal(true)
           }
         } else {
-          // Session fetch failed - show modal
+          // No file selected - show modal
           setShowFileModal(true)
         }
       } catch (error) {
@@ -250,7 +250,7 @@ export function TrainerSessionWorkspace({
       }
     }
     loadActiveFile()
-  }, [sessionCode]) // Only depend on sessionCode, not hookHandleFileSelect
+  }, [sessionData, selectedFile]) // Depend on sessionData and selectedFile
 
   // Reset the load attempt flag when session code changes
   useEffect(() => {
@@ -259,7 +259,7 @@ export function TrainerSessionWorkspace({
 
   // File selection updates are handled by useFileSelection hook's onFileChanged callback
 
-  const handleFileSelect = useCallback(async (file: { id: string; name: string; content: string }) => {
+  const handleFileSelect = useCallback(async (file: { id: string; name?: string; content?: string }) => {
     await hookHandleFileSelect(file)
   }, [hookHandleFileSelect])
 
@@ -644,23 +644,13 @@ export function TrainerSessionWorkspace({
               }
             }}
             onOpenFile={async (fileId) => {
-              // Fetch file content and select it (consistent with student implementation)
-              try {
-                const fileRes = await fetch(`/api/files/${fileId}`, {
-                  credentials: 'include',
-                })
-                if (fileRes.ok) {
-                  const fileData = await fileRes.json()
-                  handleFileSelect({
-                    id: String(fileData.id),
-                    name: fileData.name,
-                    content: fileData.content || '',
-                  })
-                  setWorkspaceMode('workspace')
-                }
-              } catch (error) {
-                console.error('Failed to load file:', error)
-              }
+              // Use handleFileSelect which now uses React Query caching
+              // Pass file without content - React Query will fetch and cache it
+              handleFileSelect({
+                id: String(fileId),
+                // name and content will be fetched by React Query
+              })
+              setWorkspaceMode('workspace')
             }}
             onOpenFolderInWorkspace={(folderId) => {
               setCurrentFolderId(folderId)

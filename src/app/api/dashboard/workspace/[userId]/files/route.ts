@@ -17,6 +17,10 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    // Check if content should be included (default: false for performance)
+    const { searchParams } = new URL(request.url)
+    const includeContent = searchParams.get('includeContent') === 'true'
+
     // Get authenticated user (staff member)
     let user
     try {
@@ -143,7 +147,7 @@ export async function GET(
       return {
         id: file.id,
         name: file.name,
-        content: file.content || '',
+        content: includeContent ? (file.content || '') : undefined, // Only include if requested
         language,
         updatedAt: file.updatedAt,
         folderPath,

@@ -13,6 +13,10 @@ import { createAuthErrorResponse } from '@/utilities/apiErrorResponse'
  */
 export async function GET(request: NextRequest) {
   try {
+    // Check if content should be included (default: false for performance)
+    const { searchParams } = new URL(request.url)
+    const includeContent = searchParams.get('includeContent') === 'true'
+
     // Get authenticated user
     let user
     try {
@@ -114,7 +118,7 @@ export async function GET(request: NextRequest) {
       return {
         id: file.id,
         name: file.name,
-        content: file.content || '',
+        content: includeContent ? (file.content || '') : undefined, // Only include if requested
         language,
         updatedAt: file.updatedAt,
         folderPath, // Add folder path

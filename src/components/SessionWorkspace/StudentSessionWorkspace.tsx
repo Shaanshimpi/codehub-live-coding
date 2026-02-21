@@ -356,7 +356,7 @@ export function StudentSessionWorkspace({
   // Auto-save and sync disabled - only manual save via button click
   // Removed periodic auto-sync to reduce API calls
 
-  const handleFileSelect = useCallback(async (file: { id: string; name: string; content: string }) => {
+  const handleFileSelect = useCallback(async (file: { id: string; name?: string; content?: string }) => {
     await hookHandleFileSelect(file)
   }, [hookHandleFileSelect])
 
@@ -648,23 +648,13 @@ export function StudentSessionWorkspace({
                       }
                     }}
                     onOpenFile={async (fileId) => {
-                      // Fetch file content and select it
-                      try {
-                        const fileRes = await fetch(`/api/files/${fileId}`, {
-                          credentials: 'include',
-                        })
-                        if (fileRes.ok) {
-                          const fileData = await fileRes.json()
-                          handleFileSelect({
-                            id: String(fileData.id),
-                            name: fileData.name,
-                            content: fileData.content || '',
-                          })
-                          setWorkspaceMode('workspace')
-                        }
-                      } catch (error) {
-                        console.error('Failed to load file:', error)
-                      }
+                      // Use handleFileSelect which now uses React Query caching
+                      // Pass file without content - React Query will fetch and cache it
+                      handleFileSelect({
+                        id: String(fileId),
+                        // name and content will be fetched by React Query
+                      })
+                      setWorkspaceMode('workspace')
                     }}
                     onOpenFolderInWorkspace={(folderId) => {
                       setCurrentFolderId(folderId)

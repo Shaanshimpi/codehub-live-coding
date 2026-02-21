@@ -1,8 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Radio, Download, Upload } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidateWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
+import { usePaymentStatus, type PaymentStatus } from '@/hooks/payment/usePaymentStatus'
 
 import { FileExplorer } from './FileExplorer'
 import { WorkspaceEditor } from './WorkspaceEditor'
@@ -45,13 +48,16 @@ interface WorkspaceLayoutProps {
 }
 
 export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: WorkspaceLayoutProps = {}) {
+  const queryClient = useQueryClient()
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
   const [showAI, setShowAI] = useState(false)
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
-  const [refreshKey, setRefreshKey] = useState(0) // Force file explorer refresh
-  const [paymentStatus, setPaymentStatus] = useState<any>(null)
+  const [refreshKey, setRefreshKey] = useState(0) // Refresh trigger for FileExplorer
+  
+  // Use React Query for payment status (cached, shared across components)
+  const { data: paymentStatus } = usePaymentStatus()
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
   const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
@@ -86,11 +92,32 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   })
 
   // Keep local refreshKey in sync with hook refreshKey for existing consumers
+  // Also invalidate workspace cache when refreshKey changes
   useEffect(() => {
     if (refreshKey !== hookRefreshKey) {
       setRefreshKey(() => hookRefreshKey)
     }
   }, [hookRefreshKey, refreshKey])
+
+  // Handle refresh by invalidating React Query cache
+  const handleRefresh = useCallback(() => {
+    console.log('[WorkspaceLayout] Refreshing workspace data', { userId })
+    invalidateWorkspaceData(queryClient, userId)
+    setRefreshKey((prev) => prev + 1)
+  }, [queryClient, userId])
+
+  // Memoized callbacks for file operations
+  const handleFileSaved = useCallback(() => {
+    console.log('[WorkspaceLayout] File saved, invalidating cache', { userId })
+    invalidateWorkspaceData(queryClient, userId)
+    setRefreshKey((prev) => prev + 1)
+  }, [queryClient, userId])
+
+  const handleEditorSave = useCallback(() => {
+    console.log('[WorkspaceLayout] File saved from editor, invalidating cache', { userId })
+    invalidateWorkspaceData(queryClient, userId)
+    setRefreshKey((prev) => prev + 1)
+  }, [queryClient, userId])
 
   // Code execution (no session sync for standalone workspace)
   const {
@@ -114,6 +141,8 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   } = useWorkspaceImportExport({
     onUploadSuccess: () => {
       // Refresh workspace
+      console.log('[WorkspaceLayout] Upload success, invalidating cache', { userId })
+      invalidateWorkspaceData(queryClient, userId)
       setRefreshKey((prev) => prev + 1)
       // Reload files
       window.location.reload()
@@ -160,48 +189,30 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
 
   // handleRun is provided by useWorkspaceCodeExecution hook
 
-  function handleFileSelect(file: WorkspaceFile) {
+  const handleFileSelect = useCallback((file: WorkspaceFile) => {
     // Delegate to shared hook handler to keep behavior consistent
     void handleFileSelectFromExplorer(file)
-  }
+  }, [handleFileSelectFromExplorer])
 
   // handleDownload and handleUpload are provided by useWorkspaceImportExport hook
 
-  // Check payment status on mount
+  // Show modals when payment status changes
   useEffect(() => {
-    const checkPaymentStatus = async () => {
-      try {
-        const res = await fetch('/api/workspace/files', { credentials: 'include' })
-        if (!res.ok) {
-          if (res.status === 403) {
-            try {
-              const errorData = await res.json()
-              if (errorData.paymentStatus) {
-                setPaymentStatus(errorData.paymentStatus)
-                return
-              }
-            } catch {
-              // Fall through
-            }
-          }
-        } else {
-          const data = await res.json()
-          if (data.paymentStatus) {
-            setPaymentStatus(data.paymentStatus)
-            if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
-              setShowPaymentModal(true)
-            }
-            if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
-              setShowGracePeriodModal(true)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error checking payment status:', error)
+    if (paymentStatus) {
+      if (paymentStatus.isDueSoon && paymentStatus.nextInstallment) {
+        setShowPaymentModal(true)
+      }
+      if (paymentStatus.isInGracePeriod && paymentStatus.nextInstallment) {
+        setShowGracePeriodModal(true)
+      }
+      if (paymentStatus.isTrialEndingSoon && paymentStatus.trialEndDate) {
+        setShowTrialEndingModal(true)
+      }
+      if (paymentStatus.isTrialInGracePeriod && paymentStatus.trialEndDate) {
+        setShowTrialGraceModal(true)
       }
     }
-    checkPaymentStatus()
-  }, [])
+  }, [paymentStatus])
 
   // Update currentFolderId when scopeFolderId changes
   useEffect(() => {
@@ -429,13 +440,13 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
           fileExplorer={
             <FileExplorerSidebar>
               <FileExplorer
-                key={refreshKey}
                 onFileSelect={handleFileSelect}
                 selectedFileId={selectedFile?.id}
-                onFileSaved={() => setRefreshKey((prev) => prev + 1)}
+                onFileSaved={handleFileSaved}
                 userId={userId}
                 readOnly={readOnly}
                 rootFolderSlug={currentFolderId ? String(currentFolderId) : undefined}
+                refreshTrigger={refreshKey}
               />
             </FileExplorerSidebar>
           }
@@ -451,7 +462,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                 onRun={handleRun}
                 executing={executing}
                 executionResult={executionResult}
-                onSave={() => setRefreshKey((prev) => prev + 1)}
+                onSave={handleEditorSave}
                 readOnly={readOnly}
                 allowRunInReadOnly={readOnly}
               />

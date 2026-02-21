@@ -26,7 +26,7 @@ interface Folder {
   }
 }
 
-export function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionModalProps) {
+export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionModalProps) {
   const [files, setFiles] = useState<WorkspaceFile[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
@@ -320,5 +320,5 @@ export function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionM
       </div>
     </div>
   )
-}
+})
 

@@ -14,9 +14,10 @@
  * @module useFileSelection
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { inferLanguageFromFileName } from '@/utilities/languageInference'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
+import { useFileContent } from './useFileContent'
 
 type WorkspaceFile = WorkspaceFileWithContent
 
@@ -37,7 +38,7 @@ interface UseFileSelectionReturn {
   /** Set selected file */
   setSelectedFile: (file: WorkspaceFile | null) => void
   /** Handle file selection from explorer */
-  handleFileSelect: (file: { id: string; name: string; content: string }) => Promise<void>
+  handleFileSelect: (file: { id: string; name?: string; content?: string }) => Promise<void>
   /** Handle file selection from modal */
   handleFileSelectFromModal: (
     fileId: string | null,
@@ -79,16 +80,43 @@ export function useFileSelection({
   saveCurrentFile,
 }: UseFileSelectionOptions = {}): UseFileSelectionReturn {
   const [selectedFile, setSelectedFileState] = useState<WorkspaceFile | null>(null)
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [switchingFile, setSwitchingFile] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const handleFileSelect = useCallback(async (file: { id: string; name: string; content: string }) => {
-    console.log('[useFileSelection] File selection started', { fileId: file.id, fileName: file.name })
+  // Use React Query for file content caching
+  const { data: fileContent, isLoading: loadingFile } = useFileContent(
+    selectedFileId,
+    { enabled: !!selectedFileId }
+  )
+
+  // Update selected file when query completes
+  useEffect(() => {
+    if (fileContent) {
+      const newFile: WorkspaceFile = {
+        id: fileContent.id,
+        name: fileContent.name,
+        content: fileContent.content,
+      }
+      setSelectedFileState(newFile)
+      if (onFileChanged) {
+        onFileChanged(newFile)
+      }
+      console.log('[useFileSelection] File content loaded from cache/query', {
+        fileId: fileContent.id,
+        fileName: fileContent.name,
+      })
+    }
+  }, [fileContent, onFileChanged])
+
+  const handleFileSelect = useCallback(async (file: { id: string; name?: string; content?: string }) => {
+    console.log('[useFileSelection] File selection started', { fileId: file.id, fileName: file.name || 'unknown' })
 
     // Auto-save current file before switching (if enabled and changed)
     if (autoSaveBeforeSwitch && selectedFile && saveCurrentFile) {
       const currentContent = selectedFile.content || ''
-      if (file.content !== currentContent) {
+      const newContent = file.content || ''
+      if (newContent !== currentContent) {
         console.log('[useFileSelection] Auto-saving current file before switch')
         setSwitchingFile(true)
         try {
@@ -101,59 +129,28 @@ export function useFileSelection({
       }
     }
 
-    // Fetch fresh file content
-    try {
-      console.log('[useFileSelection] Fetching file content', { fileId: file.id })
-      const fileRes = await fetch(`/api/files/${file.id}`, { credentials: 'include' })
-      
-      if (fileRes.ok) {
-        const fileData = await fileRes.json()
-        const fileIdStr = String(fileData.id)
-        const newFile: WorkspaceFile = {
-          id: fileIdStr,
-          name: fileData.name,
-          content: fileData.content || '',
-        }
-        
-        setSelectedFileState(newFile)
-        if (onFileChanged) {
-          onFileChanged(newFile)
-        }
-        
-        console.log('[useFileSelection] File selected successfully', { 
-          fileId: fileIdStr, 
-          fileName: fileData.name 
-        })
-      } else {
-        // Fallback to provided content
-        console.warn('[useFileSelection] Failed to fetch file, using provided content', { 
-          status: fileRes.status 
-        })
-        const fileIdStr = String(file.id)
-        const newFile: WorkspaceFile = {
-          id: fileIdStr,
-          name: file.name,
-          content: file.content,
-        }
-        setSelectedFileState(newFile)
-        if (onFileChanged) {
-          onFileChanged(newFile)
-        }
-      }
-    } catch (error) {
-      console.error('[useFileSelection] Failed to load file:', error)
-      // Fallback to provided content
-      const fileIdStr = String(file.id)
+    const fileIdStr = String(file.id)
+
+    // Check if content is already available (from list API with includeContent=true)
+    if (file.content !== undefined && file.name) {
+      console.log('[useFileSelection] Using provided content (no fetch needed)', { fileId: file.id })
       const newFile: WorkspaceFile = {
         id: fileIdStr,
         name: file.name,
         content: file.content,
       }
       setSelectedFileState(newFile)
+      setSelectedFileId(fileIdStr) // Set ID for React Query cache
       if (onFileChanged) {
         onFileChanged(newFile)
       }
+      return
     }
+
+    // Use React Query to fetch file content (will use cache if available)
+    console.log('[useFileSelection] Using React Query to fetch file content', { fileId: file.id })
+    setSelectedFileId(fileIdStr) // React Query will fetch and cache automatically
+    // The useEffect above will update selectedFile when query completes
   }, [selectedFile, autoSaveBeforeSwitch, saveCurrentFile, onFileChanged])
 
   const handleFileSelectFromModal = useCallback(async (

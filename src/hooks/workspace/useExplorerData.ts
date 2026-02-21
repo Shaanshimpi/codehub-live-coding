@@ -16,10 +16,11 @@
  * @module useExplorerData
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { useFolderFileFilter } from '@/utilities/useFolderFileFilter'
 import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
+import { useWorkspaceData } from './useWorkspaceData'
 
 type WorkspaceFile = WorkspaceFileWithFolder
 
@@ -80,91 +81,35 @@ export function useExplorerData({
   currentFolderId,
   enabled = true,
 }: UseExplorerDataOptions): UseExplorerDataReturn {
-  const [explorerFolders, setExplorerFolders] = useState<Folder[]>([])
-  const [explorerFiles, setExplorerFiles] = useState<WorkspaceFile[]>([])
-  const [explorerLoading, setExplorerLoading] = useState(false)
-  const [explorerError, setExplorerError] = useState<string | null>(null)
+  // Use React Query for workspace data caching
+  const { folders, files, isLoading, error, refetch } = useWorkspaceData(userId)
+
+  // Only fetch when in explorer mode and enabled
+  const shouldFetch = enabled && workspaceMode === 'explorer'
 
   // Compute current folder
   const currentFolder = currentFolderId
-    ? explorerFolders.find((f) => String(f.id) === String(currentFolderId)) || null
+    ? folders.find((f) => String(f.id) === String(currentFolderId)) || null
     : null
 
   // Filter folders and files for current folder
   const { childFolders, childFiles } = useFolderFileFilter({
-    folders: explorerFolders,
-    files: explorerFiles,
+    folders: shouldFetch ? folders : [],
+    files: shouldFetch ? files : [],
     currentFolder,
   })
 
-  // Fetch explorer data
-  const fetchExplorerData = useCallback(async () => {
-    if (!enabled || workspaceMode !== 'explorer') {
-      return
-    }
-
-    try {
-      console.log('[useExplorerData] Fetching explorer data...', { userId, workspaceMode, currentFolderId })
-      setExplorerLoading(true)
-      setExplorerError(null)
-
-      const foldersEndpoint = userId 
-        ? `/api/dashboard/workspace/${userId}/folders`
-        : '/api/folders?limit=1000&depth=2'
-      const filesEndpoint = userId
-        ? `/api/dashboard/workspace/${userId}/files`
-        : '/api/workspace/files'
-
-      const [foldersRes, filesRes] = await Promise.all([
-        fetch(foldersEndpoint, { credentials: 'include', cache: 'no-store' }),
-        fetch(filesEndpoint, { credentials: 'include', cache: 'no-store' }),
-      ])
-
-      if (!foldersRes.ok) {
-        throw new Error('Failed to load folders')
-      }
-
-      if (!filesRes.ok) {
-        throw new Error('Failed to load files')
-      }
-
-      const foldersData = await foldersRes.json()
-      const filesData = await filesRes.json()
-
-      const folders = (foldersData.docs || []) as Folder[]
-      const files = (filesData.files || filesData.docs || []) as WorkspaceFile[]
-
-      setExplorerFolders(folders)
-      setExplorerFiles(files)
-      
-      console.log('[useExplorerData] Explorer data fetched successfully', { 
-        foldersCount: folders.length, 
-        filesCount: files.length 
-      })
-    } catch (e) {
-      console.error('[useExplorerData] Error loading explorer data', e)
-      setExplorerError('Failed to load workspace data')
-    } finally {
-      setExplorerLoading(false)
-    }
-  }, [userId, workspaceMode, currentFolderId, enabled])
-
-  // Auto-fetch when mode changes to explorer
-  useEffect(() => {
-    fetchExplorerData()
-  }, [fetchExplorerData])
-
   // Manual refresh function
   const refreshExplorerData = useCallback(async () => {
-    console.log('[useExplorerData] Manual refresh triggered')
-    await fetchExplorerData()
-  }, [fetchExplorerData])
+    console.log('[useExplorerData] Manual refresh triggered', { userId, workspaceMode })
+    await refetch()
+  }, [refetch, userId, workspaceMode])
 
   return {
-    explorerFolders,
-    explorerFiles,
-    explorerLoading,
-    explorerError,
+    explorerFolders: shouldFetch ? folders : [],
+    explorerFiles: shouldFetch ? files : [],
+    explorerLoading: shouldFetch ? isLoading : false,
+    explorerError: shouldFetch && error ? error.message : null,
     currentFolder,
     childFolders,
     childFiles,

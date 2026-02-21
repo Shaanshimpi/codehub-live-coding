@@ -23,30 +23,15 @@ import { TrialEndingSoonModal } from '@/components/Payment/TrialEndingSoonModal'
 import { TrialGracePeriodModal } from '@/components/Payment/TrialGracePeriodModal'
 import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
 import { useTheme } from '@/providers/Theme'
+import { useSessionData, type PaymentStatus as SessionPaymentStatus } from '@/hooks/session/useSessionData'
+import { useSessionCache } from '@/hooks/session/useSessionCache'
+import { usePaymentStatus } from '@/hooks/payment/usePaymentStatus'
 
 type ActiveTab = 'trainer' | 'scratchpad'
 
-type PaymentStatus = {
-  isBlocked: boolean
-  isDueSoon: boolean
-  isInGracePeriod?: boolean
-  nextInstallment?: {
-    dueDate: string
-    amount: number
-    paymentMethod?: string
-  }
-  trialEndDate?: string | null
-  isTrialEndingSoon?: boolean
-  isTrialInGracePeriod?: boolean
-  daysUntilTrialEnd?: number
-  daysTrialOverdue?: number
-  daysRemainingInTrialGracePeriod?: number
-  reason?: 'MAINTENANCE_MODE' | 'ADMISSION_NOT_CONFIRMED' | 'PAYMENT_OVERDUE' | 'TRIAL_EXPIRED'
-  daysUntilDue?: number
-  daysOverdue?: number
-  daysRemainingInGracePeriod?: number
-}
+type PaymentStatus = SessionPaymentStatus
 
+// Keep LiveSessionLiveResponse for backward compatibility if needed
 type LiveSessionLiveResponse = {
   code: string
   output: any
@@ -87,17 +72,40 @@ export function StudentSessionClient() {
 
   const joinCode = useMemo(() => normalizeCodeParam(params?.code), [params])
 
+  // Use React Query for session data (no automatic polling - manual refresh only)
+  const { saveSessionCache } = useSessionCache()
+  const { data: sessionData, isLoading: sessionLoading, error: sessionError, refetch: refetchSession } = useSessionData(joinCode, {
+    refetchInterval: false, // No automatic polling - use manual refresh button instead
+    enabled: !!joinCode,
+  })
+
+  // Save session data to localStorage when it changes
+  useEffect(() => {
+    if (sessionData) {
+      saveSessionCache(joinCode, sessionData)
+    }
+  }, [sessionData, joinCode, saveSessionCache])
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('trainer')
   const [hasNewTrainerUpdate, setHasNewTrainerUpdate] = useState(false)
 
-  // Live session state
-  const [sessionTitle, setSessionTitle] = useState<string>('Live Session')
-  const [sessionActive, setSessionActive] = useState<boolean>(true)
-  const [participantCount, setParticipantCount] = useState<number>(0)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Live session state (derived from sessionData)
+  const sessionTitle = sessionData?.title || 'Live Session'
+  const sessionActive = sessionData?.isActive ?? true
+  const participantCount = sessionData?.participantCount || 0
+  const lastUpdate = sessionData ? new Date() : null
+  const loading = sessionLoading
+  // Handle error state - check if it's a 404 or other error
+  const error = React.useMemo(() => {
+    if (sessionError) {
+      const errorMessage = sessionError instanceof Error ? sessionError.message : String(sessionError)
+      if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        return 'Session not found.'
+      }
+      return 'Failed to load session.'
+    }
+    return null
+  }, [sessionError])
 
   // Trainer broadcast (read-only)
   const [trainerLanguage, setTrainerLanguage] = useState('javascript')
@@ -121,7 +129,13 @@ export function StudentSessionClient() {
   const [showFileDropdown, setShowFileDropdown] = useState(false)
 
   // Payment status
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
+  // Use React Query for payment status (cached, shared across components)
+  // Also get payment status from session data as fallback
+  const { data: paymentStatusFromHook } = usePaymentStatus()
+  const [paymentStatusFromSession, setPaymentStatusFromSession] = useState<PaymentStatus | null>(null)
+  
+  // Merge payment status: prefer hook (dedicated endpoint), fallback to session data
+  const paymentStatus = paymentStatusFromHook || paymentStatusFromSession
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [showGracePeriodModal, setShowGracePeriodModal] = useState(false)
   const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
@@ -143,95 +157,60 @@ export function StudentSessionClient() {
     }
   }, [paymentStatus, showPaymentModal])
 
-  const pollLive = useCallback(async () => {
-    if (!joinCode) return
+  // Update state when sessionData changes (replaces pollLive logic)
+  useEffect(() => {
+    if (!sessionData) return
 
-    try {
-      const res = await fetch(`/api/sessions/${joinCode}/live`, { cache: 'no-store' })
-      if (!res.ok) {
-        setError(res.status === 404 ? 'Session not found.' : 'Failed to load session.')
-        setLoading(false)
-        return
+    const nextTrainerLang = (sessionData.language || 'javascript').toLowerCase()
+    if (nextTrainerLang && nextTrainerLang !== trainerLanguage) {
+      setTrainerLanguage(nextTrainerLang)
+    }
+
+    // Update trainer code and output
+    setTrainerCode(sessionData.code || '')
+    setTrainerOutput(mapOutputToExecutionResult(sessionData.output))
+    
+    if (activeTab !== 'trainer') {
+      setHasNewTrainerUpdate(true)
+    }
+
+    // Handle payment status from session data (fallback if hook hasn't loaded yet)
+    if (sessionData.paymentStatus) {
+      setPaymentStatusFromSession(sessionData.paymentStatus)
+      // Show modal if payment is due soon
+      if (sessionData.paymentStatus.isDueSoon && sessionData.paymentStatus.nextInstallment) {
+        setShowPaymentModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
       }
-      const data = (await res.json()) as LiveSessionLiveResponse
-
-      setSessionTitle(data.title || 'Live Session')
-      setSessionActive(Boolean(data.isActive))
-      setParticipantCount(Number(data.participantCount || 0))
-
-      const nextTrainerLang = (data.language || 'javascript').toLowerCase()
-      if (nextTrainerLang && nextTrainerLang !== trainerLanguage) {
-        setTrainerLanguage(nextTrainerLang)
+      // Show grace period modal if in grace period
+      if (sessionData.paymentStatus.isInGracePeriod && sessionData.paymentStatus.nextInstallment) {
+        setShowGracePeriodModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
       }
-
-      // Update with whatever the API returns
-      setTrainerCode(data.code || '')
-      setTrainerOutput(mapOutputToExecutionResult(data.output))
-      setLastUpdate(new Date())
-      if (activeTab !== 'trainer') {
-        setHasNewTrainerUpdate(true)
+      // Show trial ending soon modal
+      if (sessionData.paymentStatus.isTrialEndingSoon && sessionData.paymentStatus.trialEndDate) {
+        setShowTrialEndingModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
       }
-
-      // Handle payment status
-      if (data.paymentStatus) {
-        setPaymentStatus(data.paymentStatus)
-        // Show modal if payment is due soon
-        if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
-          // Use functional update to avoid stale closure
-          setShowPaymentModal((prev) => {
-            // Only show if not already shown (avoid re-showing on every poll)
-            if (!prev) {
-              return true
-            }
-            return prev
-          })
-        }
-        // Show grace period modal if in grace period
-        if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
-          setShowGracePeriodModal((prev) => {
-            if (!prev) {
-              return true
-            }
-            return prev
-          })
-        }
-        // Show trial ending soon modal
-        if (data.paymentStatus.isTrialEndingSoon && data.paymentStatus.trialEndDate) {
-          setShowTrialEndingModal((prev) => {
-            if (!prev) {
-              return true
-            }
-            return prev
-          })
-        }
-        // Show trial grace period modal
-        if (data.paymentStatus.isTrialInGracePeriod && data.paymentStatus.trialEndDate) {
-          setShowTrialGraceModal((prev) => {
-            if (!prev) {
-              return true
-            }
-            return prev
-          })
-        }
-        // If blocked, show blocking screen (shouldn't happen here, but handle it)
-        if (data.paymentStatus.isBlocked) {
-          setError('Access blocked due to payment status')
-        }
+      // Show trial grace period modal
+      if (sessionData.paymentStatus.isTrialInGracePeriod && sessionData.paymentStatus.trialEndDate) {
+        setShowTrialGraceModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
       }
-
-      setLoading(false)
-      setError(null)
-    } catch (e) {
-      // Ignore cancellation errors
-      if (e && typeof e === 'object' && 'type' in e && e.type === 'cancelation') {
-        return
-      }
-      if (!(e && typeof e === 'object' && 'msg' in e && e.msg === 'operation is manually canceled')) {
-        setError('Failed to load session.')
-        setLoading(false)
+      // If blocked, show blocking screen
+      if (sessionData.paymentStatus.isBlocked) {
+        // Error is already set from sessionError
       }
     }
-  }, [joinCode, activeTab, trainerLanguage, fileSelectionComplete])
+  }, [sessionData, activeTab, trainerLanguage])
 
   // Join on mount; leave on unmount
   useEffect(() => {
@@ -248,8 +227,7 @@ export function StudentSessionClient() {
             try {
               const errorData = await joinRes.json()
               if (errorData.paymentStatus) {
-                setPaymentStatus(errorData.paymentStatus)
-                setLoading(false)
+                setPaymentStatusFromSession(errorData.paymentStatus)
                 return
               }
             } catch {
@@ -261,7 +239,7 @@ export function StudentSessionClient() {
           try {
             const joinData = await joinRes.json()
             if (joinData.paymentStatus) {
-              setPaymentStatus(joinData.paymentStatus)
+              setPaymentStatusFromSession(joinData.paymentStatus)
               // Show modal if payment is due soon
               if (joinData.paymentStatus.isDueSoon && joinData.paymentStatus.nextInstallment) {
                 console.log('Payment due soon from join:', {
@@ -291,7 +269,6 @@ export function StudentSessionClient() {
       } catch {
         // ignore
       }
-      if (!cancelled) pollLive()
     }
 
     join()
@@ -300,7 +277,7 @@ export function StudentSessionClient() {
       cancelled = true
       fetch(`/api/sessions/${joinCode}/leave`, { method: 'POST' }).catch(() => {})
     }
-  }, [joinCode, pollLive])
+  }, [joinCode])
 
   // Manual refresh function for trainer code
   const [refreshingTrainerCode, setRefreshingTrainerCode] = useState(false)
@@ -310,7 +287,7 @@ export function StudentSessionClient() {
     setRefreshingTrainerCode(true)
     setRefreshSuccess(false)
     try {
-      await pollLive()
+      await refetchSession()
       setRefreshSuccess(true)
       setTimeout(() => setRefreshSuccess(false), 2000)
     } catch (error) {
@@ -318,59 +295,41 @@ export function StudentSessionClient() {
     } finally {
       setRefreshingTrainerCode(false)
     }
-  }, [joinCode, pollLive])
+  }, [joinCode, refetchSession])
   
-  // Check payment status on mount (dedicated check)
+  // Payment status is now handled by usePaymentStatus hook (cached, shared)
+  // Show modals when payment status changes
   useEffect(() => {
-    const checkPaymentStatus = async () => {
-      try {
-        const res = await fetch('/api/user/payment-status', {
-          credentials: 'include',
+    if (paymentStatus) {
+      if (paymentStatus.isDueSoon && paymentStatus.nextInstallment) {
+        setShowPaymentModal((prev) => {
+          if (!prev) return true
+          return prev
         })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.paymentStatus) {
-            setPaymentStatus(data.paymentStatus)
-            // Show modal if payment is due soon
-            if (data.paymentStatus.isDueSoon && data.paymentStatus.nextInstallment) {
-              console.log('Payment due soon detected:', {
-                isDueSoon: data.paymentStatus.isDueSoon,
-                daysUntilDue: data.paymentStatus.daysUntilDue,
-                nextInstallment: data.paymentStatus.nextInstallment,
-              })
-            // Show modal immediately
-            setShowPaymentModal(true)
-            }
-            // Show grace period modal if in grace period
-            if (data.paymentStatus.isInGracePeriod && data.paymentStatus.nextInstallment) {
-              setShowGracePeriodModal(true)
-            }
-            // Show trial ending soon modal
-            if (data.paymentStatus.isTrialEndingSoon && data.paymentStatus.trialEndDate) {
-              setShowTrialEndingModal(true)
-            }
-            // Show trial grace period modal
-            if (data.paymentStatus.isTrialInGracePeriod && data.paymentStatus.trialEndDate) {
-              setShowTrialGraceModal(true)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error checking payment status:', error)
+      }
+      if (paymentStatus.isInGracePeriod && paymentStatus.nextInstallment) {
+        setShowGracePeriodModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
+      }
+      if (paymentStatus.isTrialEndingSoon && paymentStatus.trialEndDate) {
+        setShowTrialEndingModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
+      }
+      if (paymentStatus.isTrialInGracePeriod && paymentStatus.trialEndDate) {
+        setShowTrialGraceModal((prev) => {
+          if (!prev) return true
+          return prev
+        })
       }
     }
-    
-    if (joinCode) {
-      checkPaymentStatus()
-    }
-  }, [joinCode])
+  }, [paymentStatus])
 
-  // Load trainer code once on mount
-  useEffect(() => {
-    if (joinCode && fileSelectionComplete) {
-      pollLive()
-    }
-  }, [joinCode, fileSelectionComplete, pollLive])
+  // Session data is automatically loaded via useSessionData hook
+  // No need for manual polling on mount
 
   const handleScratchpadRun = async (code: string, input?: string) => {
     setScratchpadExecuting(true)

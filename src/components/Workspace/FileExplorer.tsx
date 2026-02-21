@@ -1,33 +1,34 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { FileTreeItem } from './FileTreeItem'
 import { CreateFolderModal } from './CreateFolderModal'
 import { CreateFileModal } from './CreateFileModal'
 import { FolderPlus, FilePlus } from 'lucide-react'
+import { useWorkspaceData, invalidateWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
+import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
-interface File {
+type WorkspaceFile = WorkspaceFileWithFolder
+
+// Local File type for onFileSelect callback (includes content)
+interface FileWithContent {
   id: string
   name: string
   content: string
   folder?: {
-    id: string
-    name: string
-  }
+    id: string | number
+    name?: string | null
+  } | null
 }
 
-interface Folder {
-  id: string
-  name: string
-  parentFolder?: {
-    id: string
-    name: string
-  }
-  children?: Folder[]
+// Extended Folder type with children for tree structure
+interface FolderWithChildren extends Folder {
+  children?: FolderWithChildren[]
 }
 
 interface FileExplorerProps {
-  onFileSelect: (file: File) => void
+  onFileSelect: (file: FileWithContent) => void
   selectedFileId?: string
   onFileSaved?: () => void
   userId?: string | number
@@ -37,73 +38,74 @@ interface FileExplorerProps {
    * When provided, only this folder and its descendants are shown.
    */
   rootFolderSlug?: string
+  /**
+   * Optional refresh trigger. When this value changes, the workspace cache is invalidated.
+   * This replaces the need for the key prop to force remounting.
+   */
+  refreshTrigger?: number
 }
 
-export function FileExplorer({
+export const FileExplorer = React.memo(function FileExplorer({
   onFileSelect,
   selectedFileId,
   onFileSaved,
   userId,
   readOnly = false,
   rootFolderSlug,
+  refreshTrigger,
 }: FileExplorerProps) {
-  const [folders, setFolders] = useState<Folder[]>([])
-  const [files, setFiles] = useState<File[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { folders, files, isLoading, refetch } = useWorkspaceData(userId)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   const [showCreateFile, setShowCreateFile] = useState(false)
 
-  const fetchData = async () => {
-    try {
-      setLoading(true)
-      
-      // Determine API endpoints based on userId prop
-      const foldersEndpoint = userId 
-        ? `/api/dashboard/workspace/${userId}/folders`
-        : '/api/folders?limit=1000&depth=2'
-      const filesEndpoint = userId
-        ? `/api/dashboard/workspace/${userId}/files`
-        : '/api/workspace/files'
-      
-      // Fetch folders and files using workspace API
-      const [foldersRes, filesRes] = await Promise.all([
-        fetch(foldersEndpoint, { credentials: 'include' }),
-        fetch(filesEndpoint, { credentials: 'include' }),
-      ])
-
-      if (foldersRes.ok) {
-        const foldersData = await foldersRes.json()
-        // Dashboard endpoint returns { docs: [...] }, regular endpoint returns { docs: [...] }
-        setFolders(foldersData.docs || [])
-      } else if (foldersRes.status === 401 || foldersRes.status === 403) {
-        console.warn('Not authenticated - please log in to view workspace')
-      }
-
-      if (filesRes.ok) {
-        const filesData = await filesRes.json()
-        // /api/workspace/files returns { files: [...] } format
-        // /api/dashboard/workspace/[userId]/files also returns { files: [...] } format
-        setFiles(filesData.files || filesData.docs || [])
-      } else if (filesRes.status === 401 || filesRes.status === 403) {
-        console.warn('Not authenticated - please log in to view workspace')
-      }
-    } catch (error) {
-      console.error('Error fetching workspace data:', error)
-    } finally {
-      setLoading(false)
+  // Debug: Log component mount/unmount
+  React.useEffect(() => {
+    console.log('[FileExplorer] 🟢 Component mounted', { userId, rootFolderSlug })
+    return () => {
+      console.log('[FileExplorer] 🔴 Component unmounted', { userId, rootFolderSlug })
     }
-  }
+  }, [userId, rootFolderSlug])
 
-  useEffect(() => {
-    fetchData()
-  }, [userId]) // Refetch when userId changes
+  // Invalidate cache when refreshTrigger changes (only when explicitly changed, not on mount)
+  const prevRefreshTriggerRef = React.useRef<number | undefined>(refreshTrigger)
+  React.useEffect(() => {
+    // Only invalidate if refreshTrigger actually changed (not just on initial mount)
+    if (refreshTrigger !== undefined && refreshTrigger !== prevRefreshTriggerRef.current) {
+      console.log('[FileExplorer] Refresh trigger changed, invalidating cache', { 
+        prev: prevRefreshTriggerRef.current, 
+        current: refreshTrigger, 
+        userId 
+      })
+      invalidateWorkspaceData(queryClient, userId)
+      prevRefreshTriggerRef.current = refreshTrigger
+    }
+  }, [refreshTrigger, queryClient, userId])
 
-  const handleFileClick = (file: File) => {
-    onFileSelect(file)
+  const handleFileClick = (file: WorkspaceFile) => {
+    // Convert WorkspaceFile to FileWithContent for callback
+    // Note: content will be fetched separately via useFileContent hook
+    onFileSelect({
+      id: file.id,
+      name: file.name,
+      content: '', // Content will be fetched when file is selected
+      folder: file.folder || undefined,
+    })
   }
 
   const handleRefresh = () => {
-    fetchData()
+    console.log('[FileExplorer] Manual refresh triggered', { userId })
+    invalidateWorkspaceData(queryClient, userId)
+    refetch()
+  }
+
+  // Helper function to invalidate cache after mutations
+  const invalidateCache = () => {
+    console.log('[FileExplorer] Invalidating cache after mutation', { userId })
+    invalidateWorkspaceData(queryClient, userId)
+    if (onFileSaved) {
+      onFileSaved()
+    }
   }
 
   const handleFileDelete = async (fileId: string) => {
@@ -113,10 +115,7 @@ export function FileExplorer({
         credentials: 'include',
       })
       if (res.ok) {
-        fetchData()
-        if (onFileSaved) {
-          onFileSaved()
-        }
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to delete file')
@@ -134,7 +133,7 @@ export function FileExplorer({
         credentials: 'include',
       })
       if (res.ok) {
-        fetchData()
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to delete folder')
@@ -154,10 +153,7 @@ export function FileExplorer({
         body: JSON.stringify({ name: newName }),
       })
       if (res.ok) {
-        fetchData()
-        if (onFileSaved) {
-          onFileSaved()
-        }
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to rename file')
@@ -177,7 +173,7 @@ export function FileExplorer({
         body: JSON.stringify({ name: newName }),
       })
       if (res.ok) {
-        fetchData()
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to rename folder')
@@ -197,10 +193,7 @@ export function FileExplorer({
         body: JSON.stringify({ folder: newFolderId }),
       })
       if (res.ok) {
-        fetchData()
-        if (onFileSaved) {
-          onFileSaved()
-        }
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to move file')
@@ -220,7 +213,7 @@ export function FileExplorer({
         body: JSON.stringify({ parentFolder: newParentId }),
       })
       if (res.ok) {
-        fetchData()
+        invalidateCache()
       } else {
         const error = await res.json().catch(() => ({}))
         alert(error.error || 'Failed to move folder')
@@ -231,63 +224,61 @@ export function FileExplorer({
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    )
-  }
+  // Build folder tree structure (memoized for performance)
+  // Must be called before any early returns to follow React Hooks rules
+  const folderTree = useMemo(() => {
+    const buildFolderTree = (folders: Folder[]): FolderWithChildren[] => {
+      const folderMap = new Map<string, FolderWithChildren>()
+      const rootFolders: FolderWithChildren[] = []
 
-  // Build folder tree structure
-  const buildFolderTree = (folders: Folder[]): Folder[] => {
-    const folderMap = new Map<string, Folder>()
-    const rootFolders: Folder[] = []
+      // First pass: create map
+      folders.forEach((folder) => {
+        folderMap.set(String(folder.id), { ...folder, children: [] } as FolderWithChildren)
+      })
 
-    // First pass: create map
-    folders.forEach((folder) => {
-      folderMap.set(folder.id, { ...folder, children: [] })
-    })
-
-    // Second pass: build tree
-    folders.forEach((folder) => {
-      const folderNode = folderMap.get(folder.id)!
-      if (folder.parentFolder && typeof folder.parentFolder === 'object') {
-        const parent = folderMap.get(folder.parentFolder.id)
-        if (parent) {
-          parent.children = parent.children || []
-          parent.children.push(folderNode)
+      // Second pass: build tree
+      folders.forEach((folder) => {
+        const folderNode = folderMap.get(String(folder.id))!
+        if (folder.parentFolder && typeof folder.parentFolder === 'object') {
+          const parent = folderMap.get(String(folder.parentFolder.id))
+          if (parent) {
+            parent.children = parent.children || []
+            parent.children.push(folderNode)
+          } else {
+            rootFolders.push(folderNode)
+          }
         } else {
           rootFolders.push(folderNode)
         }
-      } else {
-        rootFolders.push(folderNode)
-      }
-    })
-
-    // If a rootFolderSlug is provided and exists, use that folder as the only root
-    if (rootFolderSlug) {
-      // Try to find the folder by slug, with fallback to ID for backward compatibility
-      const scopedRoot = Array.from(folderMap.values()).find((f) => {
-        if ((f as any).slug === rootFolderSlug) return true
-        // Fallback: try matching by ID
-        if (String(f.id) === rootFolderSlug) return true
-        return false
       })
-      if (scopedRoot) {
-        return [scopedRoot]
+
+      // If a rootFolderSlug is provided and exists, use that folder as the only root
+      if (rootFolderSlug) {
+        // Try to find the folder by slug, with fallback to ID for backward compatibility
+        const scopedRoot = Array.from(folderMap.values()).find((f) => {
+          if ((f as any).slug === rootFolderSlug) return true
+          // Fallback: try matching by ID
+          if (String(f.id) === rootFolderSlug) return true
+          return false
+        })
+        if (scopedRoot) {
+          return [scopedRoot]
+        }
+        // If folder not found, return empty array (scoped view with invalid folder)
+        return []
       }
-      // If folder not found, return empty array (scoped view with invalid folder)
-      return []
+
+      return rootFolders
     }
 
-    return rootFolders
-  }
+    return buildFolderTree(folders)
+  }, [folders, rootFolderSlug])
 
-  const folderTree = buildFolderTree(folders)
   // Filter root files - files without a folder (folder is undefined or null)
   // When rootFolderSlug is provided, we are in a scoped view and do not show global root files.
-  const rootFiles = rootFolderSlug ? [] : files.filter((f) => !f.folder)
+  const rootFiles = useMemo(() => {
+    return rootFolderSlug ? [] : files.filter((f) => !f.folder)
+  }, [files, rootFolderSlug])
 
   // Get scoped folder name if rootFolderSlug is provided
   const scopedFolder = rootFolderSlug 
@@ -298,6 +289,46 @@ export function FileExplorer({
         return false
       })
     : null
+
+  // Convert Folder to FileTreeItem's expected format
+  const convertFolderForTreeItem = (folder: FolderWithChildren): any => ({
+    id: String(folder.id),
+    name: folder.name,
+    parent: folder.parentFolder ? {
+      id: String(folder.parentFolder.id),
+      name: folder.parentFolder.name || '',
+    } : undefined,
+    children: folder.children?.map(convertFolderForTreeItem),
+  })
+
+  // Convert WorkspaceFile to FileTreeItem's expected format
+  const convertFileForTreeItem = (file: WorkspaceFile): any => ({
+    id: file.id,
+    name: file.name,
+    content: '', // Content will be fetched when file is selected
+    folder: file.folder ? {
+      id: String(file.folder.id),
+      name: file.folder.name || '',
+    } : undefined,
+  })
+
+  // Convert folders array for modals (CreateFolderModal expects FolderOption[], CreateFileModal expects Folder[])
+  const convertedFolders = folders.map((f) => ({
+    id: String(f.id),
+    name: f.name || '',
+    parentFolder: f.parentFolder ? {
+      id: String(f.parentFolder.id),
+      name: f.parentFolder.name || undefined,
+    } : undefined,
+  }))
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -351,9 +382,9 @@ export function FileExplorer({
             {/* Folders */}
             {folderTree.map((folder) => (
               <FileTreeItem
-                key={folder.id}
-                folder={folder}
-                files={files}
+                key={String(folder.id)}
+                folder={convertFolderForTreeItem(folder)}
+                files={files.map(convertFileForTreeItem)}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
                 onFileDelete={readOnly ? undefined : handleFileDelete}
@@ -362,7 +393,7 @@ export function FileExplorer({
                 onFolderRename={readOnly ? undefined : handleFolderRename}
                 onFileMove={readOnly ? undefined : handleFileMove}
                 onFolderMove={readOnly ? undefined : handleFolderMove}
-                allFolders={folders}
+                allFolders={convertedFolders}
                 readOnly={readOnly}
                 level={0}
               />
@@ -372,7 +403,7 @@ export function FileExplorer({
             {rootFiles.map((file) => (
               <FileTreeItem
                 key={file.id}
-                file={file}
+                file={convertFileForTreeItem(file)}
                 selectedFileId={selectedFileId}
                 onFileClick={handleFileClick}
                 onFileDelete={readOnly ? undefined : handleFileDelete}
@@ -381,7 +412,7 @@ export function FileExplorer({
                 onFolderRename={readOnly ? undefined : handleFolderRename}
                 onFileMove={readOnly ? undefined : handleFileMove}
                 onFolderMove={readOnly ? undefined : handleFolderMove}
-                allFolders={folders}
+                allFolders={convertedFolders}
                 readOnly={readOnly}
                 level={0}
               />
@@ -393,28 +424,28 @@ export function FileExplorer({
       {/* Modals */}
       {showCreateFolder && (
         <CreateFolderModal
-          folders={folders}
-          currentFolderId={scopedFolder?.id}
+          folders={convertedFolders}
+          currentFolderId={scopedFolder ? String(scopedFolder.id) : undefined}
           onClose={() => setShowCreateFolder(false)}
           onSuccess={() => {
             setShowCreateFolder(false)
-            fetchData()
+            invalidateCache()
           }}
         />
       )}
 
       {showCreateFile && (
         <CreateFileModal
-          folders={folders}
-          currentFolderId={scopedFolder?.id}
+          folders={convertedFolders}
+          currentFolderId={scopedFolder ? String(scopedFolder.id) : undefined}
           onClose={() => setShowCreateFile(false)}
           onSuccess={() => {
             setShowCreateFile(false)
-            fetchData()
+            invalidateCache()
           }}
         />
       )}
     </div>
   )
-}
+})
 
