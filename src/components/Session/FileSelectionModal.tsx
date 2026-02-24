@@ -1,15 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { X, File, FilePlus, Loader2 } from 'lucide-react'
-import type { WorkspaceFileFull } from '@/types/workspace'
-
-interface WorkspaceFile extends Omit<WorkspaceFileFull, 'language'> {
-  language: string
-  updatedAt: string
-  folderPath?: string
-  folderName?: string | null
-}
+import { useQueryClient } from '@tanstack/react-query'
+import { useWorkspaceData, invalidateWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
+import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
 interface FileSelectionModalProps {
   isOpen: boolean
@@ -17,79 +12,37 @@ interface FileSelectionModalProps {
   onClose: () => void
 }
 
-interface Folder {
-  id: string
-  name: string
-  parentFolder?: {
-    id: string
-    name?: string
-  }
-}
-
 export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpen, onSelect, onClose }: FileSelectionModalProps) {
-  const [files, setFiles] = useState<WorkspaceFile[]>([])
-  const [folders, setFolders] = useState<Folder[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { folders, files, isLoading: loading, refetch } = useWorkspaceData()
   const [selectedOption, setSelectedOption] = useState<'workspace' | 'scratchpad' | null>(null)
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
   const [newFileName, setNewFileName] = useState('')
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [showCreateFile, setShowCreateFile] = useState(false)
+  const [confirming, setConfirming] = useState(false)
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchFiles()
-      fetchFolders()
-    }
-  }, [isOpen])
-
-  const fetchFiles = async () => {
-    try {
-      setLoading(true)
-      const res = await fetch('/api/workspace/files')
-      if (res.ok) {
-        const data = await res.json()
-        setFiles(data.files || [])
-      }
-    } catch (error) {
-      console.error('Failed to fetch files:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchFolders = async () => {
-    try {
-      const res = await fetch('/api/folders?limit=1000&depth=2')
-      if (res.ok) {
-        const data = await res.json()
-        setFolders(data.docs || [])
-      }
-    } catch (error) {
-      console.error('Failed to fetch folders:', error)
-    }
-  }
-
-  // Build hierarchical folder labels
   const folderById = React.useMemo(() => {
     const map = new Map<string, Folder>()
-    folders.forEach((f) => map.set(f.id, f))
+    folders.forEach((f) => map.set(String(f.id), f))
     return map
   }, [folders])
 
   const getPathParts = React.useCallback(
-    (id: string) => {
+    (id: string | null | undefined) => {
+      if (id == null || typeof id !== 'string') return []
       const parts: string[] = []
       const visited = new Set<string>()
-
-      let current: Folder | undefined = folderById.get(id)
-      while (current && !visited.has(current.id)) {
-        visited.add(current.id)
-        parts.unshift(current.name)
-        const parentId = current.parentFolder?.id
+      let currentId: string = id
+      let current = folderById.get(currentId)
+      while (current && !visited.has(currentId)) {
+        visited.add(currentId)
+        parts.unshift(current.name ?? '')
+        const parentRef = current.parentFolder as { id?: string | number } | undefined
+        const parentId = parentRef?.id != null ? String(parentRef.id) : ''
+        currentId = parentId
         current = parentId ? folderById.get(parentId) : undefined
       }
-
       return parts
     },
     [folderById],
@@ -97,27 +50,25 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
 
   const folderOptions = React.useMemo(() => {
     const enriched = folders.map((f) => {
-      const parts = getPathParts(f.id)
+      const parts = getPathParts(String(f.id))
       const depth = Math.max(0, parts.length - 1)
       const label = parts.join(' / ')
-      return { ...f, label, depth }
+      return { ...f, id: String(f.id), label, depth }
     })
-
     enriched.sort((a, b) => a.label.localeCompare(b.label))
     return enriched
   }, [folders, getPathParts])
 
   const handleConfirm = async () => {
     if (selectedOption === 'workspace' && selectedFileId) {
-      const file = files.find((f) => f.id === selectedFileId)
+      const file = files.find((f) => String(f.id) === selectedFileId)
       if (file) {
-        // Don't call onClose() here - let the parent component close the modal
-        // after it finishes processing the selection (which is async)
-        const language = file.language ?? 'text'
-        onSelect(file.id, file.name, file.content ?? '', language)
+        const language = (file as WorkspaceFileWithFolder & { language?: string }).language ?? 'text'
+        const content = (file as WorkspaceFileWithFolder & { content?: string }).content ?? ''
+        onSelect(String(file.id), file.name, content, language)
       }
     } else if (showCreateFile && newFileName.trim()) {
-      // Create new file - create it first, then select it
+      setConfirming(true)
       try {
         const numericFolderId = selectedFolder ? Number(selectedFolder) : null
 
@@ -128,12 +79,11 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
           body: JSON.stringify({
             name: newFileName.trim(),
             content: '',
-            folder: Number.isFinite(numericFolderId as any) ? numericFolderId : null,
+            folder: Number.isFinite(numericFolderId as number) ? numericFolderId : null,
           }),
         })
         if (res.ok) {
           const newFile = await res.json()
-          // Infer language from extension
           const parts = newFileName.trim().split('.')
           const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
           let language = 'javascript'
@@ -147,14 +97,11 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
           else if (ext === 'rb') language = 'ruby'
           else if (ext === 'go') language = 'go'
           else if (ext === 'rs') language = 'rust'
-          
-          // Refresh file list after creating
-          await fetchFiles()
-          
-          // File ID from Payload is a number, convert to string
+
+          invalidateWorkspaceData(queryClient)
+          await refetch()
+
           const fileId = String(newFile.doc.id)
-          // Don't call onClose() here - let the parent component close the modal
-          // after it finishes processing the selection (which is async)
           onSelect(fileId, newFile.doc.name, '', language)
         } else {
           const errorData = await res.json().catch(() => ({}))
@@ -163,6 +110,8 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
       } catch (error) {
         console.error('Failed to create file:', error)
         alert('Failed to create file')
+      } finally {
+        setConfirming(false)
       }
     }
   }
@@ -205,34 +154,40 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {files.map((file) => (
-                      <div
-                        key={file.id}
-                        className={`border rounded-md p-2 cursor-pointer transition-colors ${
-                          selectedOption === 'workspace' && selectedFileId === file.id
-                            ? 'border-primary bg-primary/10'
-                            : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => {
-                          setSelectedOption('workspace')
-                          setSelectedFileId(file.id)
-                          setShowCreateFile(false)
-                        }}
-                      >
-                        <div className="flex items-center gap-2">
-                          <File className="h-3 w-3 text-muted-foreground" />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-xs truncate">{file.name}</div>
-                            <div className="text-[10px] text-muted-foreground truncate" suppressHydrationWarning>
-                              {file.folderPath ? `📁 ${file.folderPath}/` : ''} {file.language} • {new Date(file.updatedAt).toLocaleDateString()}
+                    {files.map((file) => {
+                      const fileId = String(file.id)
+                      const updatedAt = (file as WorkspaceFileWithFolder & { updatedAt?: string }).updatedAt
+                      const folderPath = (file as WorkspaceFileWithFolder & { folderPath?: string }).folderPath
+                      const lang = (file as WorkspaceFileWithFolder & { language?: string }).language ?? 'text'
+                      return (
+                        <div
+                          key={fileId}
+                          className={`border rounded-md p-2 cursor-pointer transition-colors ${
+                            selectedOption === 'workspace' && selectedFileId === fileId
+                              ? 'border-primary bg-primary/10'
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => {
+                            setSelectedOption('workspace')
+                            setSelectedFileId(fileId)
+                            setShowCreateFile(false)
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <File className="h-3 w-3 text-muted-foreground" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-xs truncate">{file.name}</div>
+                              <div className="text-[10px] text-muted-foreground truncate" suppressHydrationWarning>
+                                {folderPath ? `📁 ${folderPath}/` : ''} {lang} • {updatedAt ? new Date(updatedAt).toLocaleDateString() : ''}
+                              </div>
                             </div>
+                            {selectedOption === 'workspace' && selectedFileId === fileId && (
+                              <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                            )}
                           </div>
-                          {selectedOption === 'workspace' && selectedFileId === file.id && (
-                            <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -309,12 +264,20 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
           <button
             onClick={handleConfirm}
             disabled={
-              !selectedOption &&
-              !(showCreateFile && newFileName.trim())
+              confirming ||
+              (!selectedOption &&
+              !(showCreateFile && newFileName.trim()))
             }
-            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Confirm
+            {confirming ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Creating...</span>
+              </>
+            ) : (
+              'Confirm'
+            )}
           </button>
         </div>
       </div>

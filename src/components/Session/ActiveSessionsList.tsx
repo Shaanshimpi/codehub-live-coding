@@ -1,102 +1,51 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { RefreshCw, Loader2, Users, Calendar, Monitor as MonitorIcon } from 'lucide-react'
 import { cn } from '@/utilities/ui'
-
-interface Session {
-  id: number
-  joinCode: string
-  title: string
-  trainer: {
-    id: number
-    name: string
-    email: string
-  } | null
-  participantCount: number
-  startedAt: string
-}
+import { useActiveSessionsList, type SessionListItem } from '@/hooks/session/useActiveSessionsList'
 
 interface ActiveSessionsListProps {
   onSessionSelect?: (joinCode: string) => void
   actionLabel?: string
   actionIcon?: React.ReactNode
+  actionLoadingCode?: string | null
   showRefresh?: boolean
   className?: string
   emptyMessage?: string
   emptySubMessage?: string
-  trainerId?: string // Optional: Filter sessions by trainer ID
+  trainerId?: string | number
 }
 
 export function ActiveSessionsList({
   onSessionSelect,
   actionLabel = 'Select',
   actionIcon,
+  actionLoadingCode = null,
   showRefresh = true,
   className,
   emptyMessage = 'No active sessions found.',
   emptySubMessage,
   trainerId,
 }: ActiveSessionsListProps) {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
+  const { sessions, isLoading: loading, error: queryError, refetch } = useActiveSessionsList(trainerId)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshSuccess, setRefreshSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const fetchSessions = useCallback(async () => {
-    try {
-      // Build URL with optional trainerId filter
-      const url = trainerId 
-        ? `/api/sessions/list?trainerId=${encodeURIComponent(trainerId)}`
-        : '/api/sessions/list'
-      
-      const res = await fetch(url, { cache: 'no-store' })
-      
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          // For non-staff users, silently fail and show empty state
-          setSessions([])
-          setError(null)
-          return
-        }
-        if (res.status >= 500) {
-          setError('Server error. Please try again later.')
-          return
-        }
-        throw new Error(`Failed to fetch sessions (${res.status})`)
-      }
-
-      const data = await res.json()
-      setSessions(data.sessions || [])
-      setError(null)
-    } catch (err) {
-      console.error('Error fetching sessions:', err)
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        setError('Network error. Please check your connection and try again.')
-      } else {
-        setError('Failed to load sessions. Please try again.')
-      }
-    }
-  }, [trainerId])
-
-  useEffect(() => {
-    const loadInitial = async () => {
-      setLoading(true)
-      await fetchSessions()
-      setLoading(false)
-    }
-    loadInitial()
-  }, [fetchSessions])
+  const error = queryError
+    ? queryError instanceof TypeError && queryError.message?.includes('fetch')
+      ? 'Network error. Please check your connection and try again.'
+      : 'Failed to load sessions. Please try again.'
+    : null
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     setRefreshSuccess(false)
-    await fetchSessions()
+    await refetch()
     setRefreshing(false)
     setRefreshSuccess(true)
     setTimeout(() => setRefreshSuccess(false), 2000)
-  }, [fetchSessions])
+  }, [refetch])
 
   const handleSessionClick = useCallback((joinCode: string) => {
     if (onSessionSelect) {
@@ -153,7 +102,7 @@ export function ActiveSessionsList({
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session) => (
+          {sessions.map((session: SessionListItem) => (
             <div
               key={session.id}
               className="rounded-lg border bg-card p-4 hover:bg-accent/50 transition-colors"
@@ -189,10 +138,15 @@ export function ActiveSessionsList({
                 {onSessionSelect && (
                   <button
                     onClick={() => handleSessionClick(session.joinCode)}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    disabled={actionLoadingCode === session.joinCode}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {actionIcon}
-                    {actionLabel}
+                    {actionLoadingCode === session.joinCode ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      actionIcon
+                    )}
+                    <span>{actionLoadingCode === session.joinCode ? 'Joining...' : actionLabel}</span>
                   </button>
                 )}
               </div>
