@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, CheckCircle, Unlock, Lock } from 'lucide-react'
+import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, CheckCircle, Unlock, Lock, Loader2 } from 'lucide-react'
 import { hasFullAccess } from '@/utilities/dashboardAccess'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 import type { User } from '@/payload-types'
 
 interface UserListItem {
@@ -33,10 +34,10 @@ interface UsersResponse {
 
 export function UsersListClient() {
   const router = useRouter()
+  const { user: currentUser } = useCurrentUser()
   const [users, setUsers] = useState<UserListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentUser, setCurrentUser] = useState<User | null>(null)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [page, setPage] = useState(1)
@@ -47,22 +48,6 @@ export function UsersListClient() {
   const [togglingAccessId, setTogglingAccessId] = useState<number | null>(null)
 
   const limit = 20
-
-  // Fetch current user to check permissions
-  useEffect(() => {
-    const fetchCurrentUser = async () => {
-      try {
-        const res = await fetch('/api/users/me', { credentials: 'include' })
-        if (res.ok) {
-          const data = await res.json()
-          setCurrentUser(data.user)
-        }
-      } catch (err) {
-        console.error('Error fetching current user:', err)
-      }
-    }
-    fetchCurrentUser()
-  }, [])
 
   // Fetch users
   const fetchUsers = async () => {
@@ -394,24 +379,30 @@ export function UsersListClient() {
                                     <button
                                       onClick={() => handleAdmit(user.id)}
                                       disabled={admittingId === user.id}
-                                      className="rounded-md p-1.5 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900 dark:hover:text-green-200 transition-colors disabled:opacity-50"
-                                      title="Mark as Admitted"
+                                      className="rounded-md p-1.5 text-muted-foreground hover:bg-green-100 hover:text-green-700 dark:hover:bg-green-900 dark:hover:text-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={admittingId === user.id ? 'Admitting...' : 'Mark as Admitted'}
                                     >
-                                      <CheckCircle className="h-4 w-4" />
+                                      {admittingId === user.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                      )}
                                     </button>
                                   )}
                                   {user.role === 'student' && (
                                     <button
                                       onClick={() => handleToggleTemporaryAccess(user.id, user.temporaryAccessGranted || false)}
                                       disabled={togglingAccessId === user.id}
-                                      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+                                      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                         user.temporaryAccessGranted
                                           ? 'text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-900'
                                           : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                                       }`}
-                                      title={user.temporaryAccessGranted ? 'Revoke Temporary Access' : 'Grant Temporary Access'}
+                                      title={togglingAccessId === user.id ? 'Updating...' : (user.temporaryAccessGranted ? 'Revoke Temporary Access' : 'Grant Temporary Access')}
                                     >
-                                      {user.temporaryAccessGranted ? (
+                                      {togglingAccessId === user.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : user.temporaryAccessGranted ? (
                                         <Unlock className="h-4 w-4" />
                                       ) : (
                                         <Lock className="h-4 w-4" />
@@ -428,10 +419,14 @@ export function UsersListClient() {
                                   <button
                                     onClick={() => handleDelete(user.id)}
                                     disabled={deletingId === user.id}
-                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
-                                    title="Delete"
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title={deletingId === user.id ? 'Deleting...' : 'Delete'}
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    {deletingId === user.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
                                   </button>
                                 </>
                               )}

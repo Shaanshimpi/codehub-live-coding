@@ -92,19 +92,19 @@ export function useFileSelection({
     { enabled: !!selectedFileId }
   )
 
-  // Update selected file when query completes, but only call onFileChanged if it's a different file
+  // Update selected file when query completes, but only when it's a different file.
+  // On same-file refetch, skip both setSelectedFileState and onFileChanged so we don't overwrite user edits.
   useEffect(() => {
     if (fileContent) {
-      const newFile: WorkspaceFile = {
-        id: fileContent.id,
-        name: fileContent.name,
-        content: fileContent.content,
-      }
-      setSelectedFileState(newFile)
-      
-      // Only call onFileChanged if this is a different file than the last one we loaded
-      // This prevents overwriting user's typed code when React Query refetches the same file
-      if (fileContent.id !== lastLoadedFileIdRef.current) {
+      const isNewFile = fileContent.id !== lastLoadedFileIdRef.current
+
+      if (isNewFile) {
+        const newFile: WorkspaceFile = {
+          id: fileContent.id,
+          name: fileContent.name,
+          content: fileContent.content,
+        }
+        setSelectedFileState(newFile)
         lastLoadedFileIdRef.current = fileContent.id
         if (onFileChanged) {
           onFileChanged(newFile)
@@ -114,7 +114,7 @@ export function useFileSelection({
           fileName: fileContent.name,
         })
       } else {
-        console.log('[useFileSelection] File content refetched (same file), skipping onFileChanged to preserve user edits', {
+        console.log('[useFileSelection] File content refetched (same file), skipping state update to preserve user edits', {
           fileId: fileContent.id,
         })
       }

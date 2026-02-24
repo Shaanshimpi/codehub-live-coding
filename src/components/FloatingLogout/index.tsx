@@ -5,29 +5,14 @@ import { LogOut, Sun, Moon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from '@/providers/Theme'
 import type { Theme } from '@/providers/Theme/types'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 export function FloatingLogout() {
   const [isLoading, setIsLoading] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const { isLoggedIn } = useCurrentUser()
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [currentTheme, setCurrentTheme] = useState<Theme>('light')
-
-  // Check if user is logged in
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const res = await fetch('/api/users/me', {
-          credentials: 'include',
-          cache: 'no-store',
-        })
-        setIsLoggedIn(res.ok)
-      } catch (error) {
-        setIsLoggedIn(false)
-      }
-    }
-    checkAuth()
-  }, [])
 
   // Get current theme from DOM or localStorage
   useEffect(() => {

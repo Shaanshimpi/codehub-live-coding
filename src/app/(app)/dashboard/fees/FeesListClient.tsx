@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react'
+import { Search, Plus, Eye, Edit, Trash2, ChevronLeft, ChevronRight, DollarSign, Loader2 } from 'lucide-react'
 import type { User } from '@/payload-types'
 
 interface FeeListItem {
@@ -351,10 +351,14 @@ export function FeesListClient() {
                               <button
                                 onClick={() => handleDelete(fee.id)}
                                 disabled={deletingId === fee.id}
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
-                                title="Delete"
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={deletingId === fee.id ? 'Deleting...' : 'Delete'}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingId === fee.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                               </button>
                             </div>
                           </td>

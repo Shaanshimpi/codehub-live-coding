@@ -74,6 +74,8 @@ export function useFileContent(
     enabled: enabled && !!fileId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   })
 
   return {

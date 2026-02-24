@@ -4,42 +4,18 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Radio, Play } from 'lucide-react'
 import { ActiveSessionsList } from '@/components/Session/ActiveSessionsList'
-
-interface MeResponse {
-  user?: {
-    id: string
-    email: string
-    role?: string
-  } | null
-}
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 export function TrainerStartClient() {
   const router = useRouter()
+  const { user: me, isLoading: loading, error: userError } = useCurrentUser()
   const [title, setTitle] = useState('')
-  const [me, setMe] = useState<MeResponse['user'] | null>(null)
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Who am I?
-        const meRes = await fetch('/api/users/me', { cache: 'no-store' })
-        if (meRes.ok) {
-          const meData = await meRes.json()
-          setMe(meData.user || null)
-        }
-      } catch (e) {
-        console.error('Error loading trainer start data', e)
-        setError('Failed to load user info')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [])
+    if (userError) setError('Failed to load user info')
+  }, [userError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

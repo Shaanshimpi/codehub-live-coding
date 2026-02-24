@@ -11,6 +11,7 @@
 
 import React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { logApiFetch } from '@/utilities/devApiLogger'
 import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
 type WorkspaceFile = WorkspaceFileWithFolder
@@ -60,20 +61,18 @@ export function useWorkspaceData(userId?: string | number): UseWorkspaceDataRetu
   const foldersQuery = useQuery<Folder[]>({
     queryKey: [...queryKey, 'folders'],
     queryFn: async () => {
-      console.log('[useWorkspaceData] ⚠️ FETCHING folders from API (cache miss or stale)', { userId, endpoint: foldersEndpoint })
+      logApiFetch('useWorkspaceData(folders)', foldersEndpoint)
       const res = await fetch(foldersEndpoint, {
         credentials: 'include',
         cache: 'no-store',
       })
-      
       if (!res.ok) {
+        logApiFetch('useWorkspaceData(folders)', foldersEndpoint, 'error')
         throw new Error(`Failed to load folders: ${res.status}`)
       }
-      
+      logApiFetch('useWorkspaceData(folders)', foldersEndpoint, 'ok')
       const data = await res.json()
-      const folders = (data.docs || []) as Folder[]
-      console.log('[useWorkspaceData] ✅ Folders fetched from API', { count: folders.length })
-      return folders
+      return (data.docs || []) as Folder[]
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -82,35 +81,22 @@ export function useWorkspaceData(userId?: string | number): UseWorkspaceDataRetu
     refetchOnReconnect: false, // Don't refetch on reconnect
   })
 
-  // Debug: Log when data is loaded from cache vs fetched
-  React.useEffect(() => {
-    if (foldersQuery.data && !foldersQuery.isFetching) {
-      console.log('[useWorkspaceData] 📦 Folders data available', { 
-        fromCache: !foldersQuery.isLoading && foldersQuery.dataUpdatedAt < Date.now() - 1000,
-        count: foldersQuery.data.length,
-        dataUpdatedAt: new Date(foldersQuery.dataUpdatedAt).toISOString()
-      })
-    }
-  }, [foldersQuery.data, foldersQuery.isFetching, foldersQuery.isLoading, foldersQuery.dataUpdatedAt])
-
   // Fetch files
   const filesQuery = useQuery<WorkspaceFile[]>({
     queryKey: [...queryKey, 'files'],
     queryFn: async () => {
-      console.log('[useWorkspaceData] ⚠️ FETCHING files from API (cache miss or stale)', { userId, endpoint: filesEndpoint })
+      logApiFetch('useWorkspaceData(files)', filesEndpoint)
       const res = await fetch(filesEndpoint, {
         credentials: 'include',
         cache: 'no-store',
       })
-      
       if (!res.ok) {
+        logApiFetch('useWorkspaceData(files)', filesEndpoint, 'error')
         throw new Error(`Failed to load files: ${res.status}`)
       }
-      
+      logApiFetch('useWorkspaceData(files)', filesEndpoint, 'ok')
       const data = await res.json()
-      const files = (data.files || data.docs || []) as WorkspaceFile[]
-      console.log('[useWorkspaceData] ✅ Files fetched from API', { count: files.length })
-      return files
+      return (data.files || data.docs || []) as WorkspaceFile[]
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -153,8 +139,6 @@ export function useWorkspaceData(userId?: string | number): UseWorkspaceDataRetu
  * @param userId - Optional user ID to invalidate specific workspace cache
  */
 export function invalidateWorkspaceData(queryClient: ReturnType<typeof useQueryClient>, userId?: string | number) {
-  const queryKey = ['workspace', 'data', userId || 'current']
-  console.log('[useWorkspaceData] Invalidating workspace cache', { userId, queryKey })
-  queryClient.invalidateQueries({ queryKey })
+  queryClient.invalidateQueries({ queryKey: ['workspace', 'data', userId || 'current'] })
 }
 

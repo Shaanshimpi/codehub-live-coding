@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Radio, ArrowRight } from 'lucide-react'
+import { Radio, ArrowRight, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
 import { ActiveSessionsList } from '@/components/Session/ActiveSessionsList'
@@ -23,6 +23,7 @@ export function JoinSessionClient() {
   const [joinCode, setJoinCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [joiningCode, setJoiningCode] = useState<string | null>(null)
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,6 +35,8 @@ export function JoinSessionClient() {
       return
     }
 
+    const code = joinCode.trim().toUpperCase()
+    setJoiningCode(code)
     setLoading(true)
 
     try {
@@ -42,11 +45,12 @@ export function JoinSessionClient() {
       if (!codePattern.test(joinCode.trim())) {
         setError('Invalid code. Use only A–Z (no O/I/L) and digits 2–9, e.g. ABC-234-XYZ')
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
       // Check if session exists
-      const response = await fetch(`/api/sessions/${joinCode.trim().toUpperCase()}/live`)
+      const response = await fetch(`/api/sessions/${code}/live`)
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -55,6 +59,7 @@ export function JoinSessionClient() {
           setError('Failed to join session. Please try again.')
         }
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
@@ -63,12 +68,13 @@ export function JoinSessionClient() {
       if (!session.isActive) {
         setError('This session has ended.')
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
       // Join the session
       const joinResponse = await fetch(
-        `/api/sessions/${joinCode.trim().toUpperCase()}/join`,
+        `/api/sessions/${code}/join`,
         {
           method: 'POST',
         },
@@ -82,6 +88,7 @@ export function JoinSessionClient() {
             if (errorData.paymentStatus) {
               setPaymentStatus(errorData.paymentStatus)
               setLoading(false)
+              setJoiningCode(null)
               return
             }
           } catch {
@@ -90,24 +97,28 @@ export function JoinSessionClient() {
         }
         setError('Failed to join session. Please try again.')
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
       // Redirect to new session view (with workspace integration)
-      window.location.href = `/student/session/${joinCode.trim().toUpperCase()}`
+      window.location.href = `/student/session/${code}`
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
+      setJoiningCode(null)
     }
   }
 
-  const handleSessionSelect = async (joinCode: string) => {
+  const handleSessionSelect = async (selectedCode: string) => {
     setError(null)
+    const code = selectedCode.trim().toUpperCase()
+    setJoiningCode(code)
     setLoading(true)
 
     try {
       // Check if session exists
-      const response = await fetch(`/api/sessions/${joinCode.trim().toUpperCase()}/live`)
+      const response = await fetch(`/api/sessions/${code}/live`)
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -116,6 +127,7 @@ export function JoinSessionClient() {
           setError('Failed to join session. Please try again.')
         }
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
@@ -124,12 +136,13 @@ export function JoinSessionClient() {
       if (!session.isActive) {
         setError('This session has ended.')
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
       // Join the session
       const joinResponse = await fetch(
-        `/api/sessions/${joinCode.trim().toUpperCase()}/join`,
+        `/api/sessions/${code}/join`,
         {
           method: 'POST',
         },
@@ -143,6 +156,7 @@ export function JoinSessionClient() {
             if (errorData.paymentStatus) {
               setPaymentStatus(errorData.paymentStatus)
               setLoading(false)
+              setJoiningCode(null)
               return
             }
           } catch {
@@ -151,14 +165,16 @@ export function JoinSessionClient() {
         }
         setError('Failed to join session. Please try again.')
         setLoading(false)
+        setJoiningCode(null)
         return
       }
 
       // Redirect to new session view (with workspace integration)
-      window.location.href = `/student/session/${joinCode.trim().toUpperCase()}`
+      window.location.href = `/student/session/${code}`
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
       setLoading(false)
+      setJoiningCode(null)
     }
   }
 
@@ -218,7 +234,10 @@ export function JoinSessionClient() {
               className="w-full flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                'Joining...'
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Joining...</span>
+                </>
               ) : (
                 <>
                   <Radio className="h-4 w-4" />
@@ -245,6 +264,7 @@ export function JoinSessionClient() {
             onSessionSelect={handleSessionSelect}
             actionLabel="Join"
             actionIcon={<Radio className="h-4 w-4" />}
+            actionLoadingCode={joiningCode}
             emptyMessage="No active sessions available."
             emptySubMessage="Ask your trainer for a session code or wait for a session to start."
           />

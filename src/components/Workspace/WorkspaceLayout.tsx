@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { Radio, Download, Upload } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -29,6 +29,7 @@ import { FileExplorerSidebar } from './FileExplorerSidebar'
 import { OutputPanelWrapper } from './OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from './AIAssistantPanelWrapper'
 import { useExplorerData } from '@/hooks/workspace/useExplorerData'
+import { useWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
 import { useFolderExplorerHandlers } from '@/hooks/workspace/useFolderExplorerHandlers'
 import { useFileSelection } from '@/hooks/workspace/useFileSelection'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
@@ -63,8 +64,14 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   const [showTrialEndingModal, setShowTrialEndingModal] = useState(false)
   const [showTrialGraceModal, setShowTrialGraceModal] = useState(false)
   const [viewingUserName, setViewingUserName] = useState<string | null>(null)
-  const [scopedFolder, setScopedFolder] = useState<(BasicFolderRef & { slug?: string | null }) | null>(null)
-  const [scopedFolderLoading, setScopedFolderLoading] = useState(false)
+  // Workspace data for deriving scoped folder (shared cache with explorer)
+  const { folders: workspaceFolders, isLoading: workspaceFoldersLoading } = useWorkspaceData(userId)
+  const scopedFolder = React.useMemo(() => {
+    if (!scopeFolderId) return null
+    const folder = workspaceFolders.find((f) => String(f.id) === String(scopeFolderId))
+    return folder ? (folder as BasicFolderRef & { slug?: string | null }) : null
+  }, [scopeFolderId, workspaceFolders])
+  const scopedFolderLoading = scopeFolderId ? workspaceFoldersLoading : false
   // Default to Explorer mode for root workspace, Workspace mode for scoped folders
   const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>(scopeFolderId ? 'workspace' : 'explorer')
   const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(scopeFolderId || null)
@@ -180,9 +187,15 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
     setRefreshKey: setHookRefreshKey,
   })
 
-  // Update code when file changes (language is handled by onFileChanged callback)
+  // Update code only when the selected file *id* changes (user switched file), not when selectedFile ref updates (e.g. refetch)
+  const lastSyncedFileIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (selectedFile) {
+    if (!selectedFile) {
+      lastSyncedFileIdRef.current = null
+      return
+    }
+    if (selectedFile.id !== lastSyncedFileIdRef.current) {
+      lastSyncedFileIdRef.current = selectedFile.id
       setCode(selectedFile.content || '')
     }
   }, [selectedFile])
@@ -217,35 +230,6 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   // Update currentFolderId when scopeFolderId changes
   useEffect(() => {
     setCurrentFolderId(scopeFolderId || null)
-  }, [scopeFolderId])
-
-  // Fetch scoped folder data when scopeFolderId is provided
-  useEffect(() => {
-    if (scopeFolderId) {
-      const fetchScopedFolder = async () => {
-        try {
-          setScopedFolderLoading(true)
-          const res = await fetch(`/api/folders?limit=1000&depth=2`, { credentials: 'include', cache: 'no-store' })
-          if (res.ok) {
-            const data = await res.json()
-            // Find folder by ID
-            const folder = (data.docs || []).find((f: any) => {
-              return String(f.id) === String(scopeFolderId)
-            })
-            if (folder) {
-              setScopedFolder(folder as BasicFolderRef & { slug?: string | null })
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch scoped folder:', error)
-        } finally {
-          setScopedFolderLoading(false)
-        }
-      }
-      fetchScopedFolder()
-    } else {
-      setScopedFolder(null)
-    }
   }, [scopeFolderId])
 
   const scopedBreadcrumb = scopedFolder ? buildFolderPathChain(scopedFolder) : []

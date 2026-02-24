@@ -10,6 +10,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { logApiFetch } from '@/utilities/devApiLogger'
 
 export type PaymentStatus = {
   isBlocked: boolean
@@ -57,24 +58,19 @@ export function usePaymentStatus(options?: {
   return useQuery<PaymentStatus>({
     queryKey: ['payment', 'status'],
     queryFn: async () => {
-      console.log('[usePaymentStatus] ⚠️ FETCHING payment status from API')
-      const res = await fetch('/api/user/payment-status', {
-        credentials: 'include',
-      })
-
+      const url = '/api/user/payment-status'
+      logApiFetch('usePaymentStatus', url)
+      const res = await fetch(url, { credentials: 'include' })
       if (!res.ok) {
+        logApiFetch('usePaymentStatus', url, 'error')
         throw new Error(`Failed to fetch payment status: ${res.status}`)
       }
-
+      logApiFetch('usePaymentStatus', url, 'ok')
       const data: PaymentStatusResponse = await res.json()
-      console.log('[usePaymentStatus] ✅ Payment status fetched from API', {
-        isBlocked: data.paymentStatus.isBlocked,
-        isDueSoon: data.paymentStatus.isDueSoon,
-      })
       return data.paymentStatus
     },
     enabled: options?.enabled !== false,
-    staleTime: Infinity, // Never consider data stale - only fetch on page load/refresh
+    staleTime: 10 * 60 * 1000, // 10 minutes - one fetch per "session"; refetch only when explicitly invalidated or after long gap
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnMount: false, // Use cache if available (only fetch if no cache)

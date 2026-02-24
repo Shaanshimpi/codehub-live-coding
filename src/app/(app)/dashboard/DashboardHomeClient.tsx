@@ -18,6 +18,7 @@ import { StatsCard } from '@/components/Dashboard/StatsCard'
 import { RecentActivity } from '@/components/Dashboard/RecentActivity'
 import { useRouter } from 'next/navigation'
 import { hasFullAccess } from '@/utilities/dashboardAccess'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 import type { User } from '@/payload-types'
 
 interface DashboardStats {
@@ -44,10 +45,10 @@ interface ActivityItem {
 
 export function DashboardHomeClient() {
   const router = useRouter()
+  const { user, isLoading: userLoading } = useCurrentUser()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<User | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -56,27 +57,15 @@ export function DashboardHomeClient() {
         setLoading(true)
         setError(null)
 
-        // Fetch user info
-        const userRes = await fetch('/api/users/me', { credentials: 'include' })
-        if (userRes.ok) {
-          const userData = await userRes.json()
-          setUser(userData.user)
-        }
-
-        // Fetch statistics
-        const statsRes = await fetch('/api/dashboard/stats', { credentials: 'include' })
-        if (!statsRes.ok) {
-          throw new Error('Failed to fetch statistics')
-        }
+        const [statsRes, activityRes] = await Promise.all([
+          fetch('/api/dashboard/stats', { credentials: 'include' }),
+          fetch('/api/dashboard/activity', { credentials: 'include' }),
+        ])
+        if (!statsRes.ok) throw new Error('Failed to fetch statistics')
+        if (!activityRes.ok) throw new Error('Failed to fetch activity feed')
         const statsData = await statsRes.json()
-        setStats(statsData.stats)
-
-        // Fetch activity feed
-        const activityRes = await fetch('/api/dashboard/activity', { credentials: 'include' })
-        if (!activityRes.ok) {
-          throw new Error('Failed to fetch activity feed')
-        }
         const activityData = await activityRes.json()
+        setStats(statsData.stats)
         setActivities(activityData.activities || [])
       } catch (err) {
         console.error('Error fetching dashboard data:', err)
@@ -91,7 +80,7 @@ export function DashboardHomeClient() {
 
   const isFullAccess = user ? hasFullAccess(user) : false
 
-  if (loading) {
+  if (userLoading || loading) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">

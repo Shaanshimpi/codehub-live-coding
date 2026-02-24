@@ -8,7 +8,7 @@ import React, {
 } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { Code, Eye, RefreshCw, X, FilePlus, Save } from 'lucide-react'
+import { Code, Eye, RefreshCw, X, FilePlus, Save, Loader2 } from 'lucide-react'
 
 import { LiveCodePlayground, SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
@@ -549,9 +549,15 @@ export function StudentSessionClient() {
     }
   }, [joinCode, fileSelectionComplete, syncScratchpad])
 
+  const [leaving, setLeaving] = useState(false)
   const handleLeave = async () => {
-    await fetch(`/api/sessions/${joinCode}/leave`, { method: 'POST' }).catch(() => {})
-    router.push('/workspace')
+    setLeaving(true)
+    try {
+      await fetch(`/api/sessions/${joinCode}/leave`, { method: 'POST' }).catch(() => {})
+      router.push('/workspace')
+    } finally {
+      setLeaving(false)
+    }
   }
 
   // Prevent copying trainer code (encourage typing)
@@ -634,10 +640,15 @@ export function StudentSessionClient() {
 
           <button
             onClick={handleLeave}
-            className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+            disabled={leaving}
+            className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X className="h-3 w-3" />
-            Leave
+            {leaving ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <X className="h-3 w-3" />
+            )}
+            <span>{leaving ? 'Leaving...' : 'Leave'}</span>
           </button>
         </div>
       </header>
@@ -872,8 +883,12 @@ export function StudentSessionClient() {
                       )}
                       title={!fileSelectionComplete ? "Please select a file first" : "Save your code"}
                     >
-                      {savingScratchpad ? <Save className="h-3 w-3 animate-pulse" /> : <Save className="h-3 w-3" />}
-                      {saveScratchpadSuccess ? 'Saved!' : 'Save'}
+                      {savingScratchpad ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
+                      <span>{savingScratchpad ? 'Saving...' : saveScratchpadSuccess ? 'Saved!' : 'Save'}</span>
                     </button>
                     <select
                       value={scratchpadLanguage}

@@ -11,6 +11,7 @@
 
 import React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { logApiFetch } from '@/utilities/devApiLogger'
 
 export type PaymentStatus = {
   isBlocked: boolean
@@ -50,7 +51,7 @@ interface UseSessionDataOptions {
   refetchInterval?: number | false
   /** Whether the query is enabled */
   enabled?: boolean
-  /** Whether to pause polling when tab is hidden */
+  /** When true (default), polling pauses when the tab is hidden to reduce load. */
   pauseOnHidden?: boolean
 }
 
@@ -75,9 +76,11 @@ export function useSessionData(
 ) {
   const [isTabVisible, setIsTabVisible] = React.useState(true)
 
-  // Handle visibility change for pause-on-hidden feature
+  // When pauseOnHidden is true (default), stop polling when tab is hidden to reduce server/DB load
+  const pauseOnHidden = options?.pauseOnHidden !== false
+
   React.useEffect(() => {
-    if (!options?.pauseOnHidden) return
+    if (!pauseOnHidden) return
 
     const handleVisibilityChange = () => {
       setIsTabVisible(!document.hidden)
@@ -87,37 +90,34 @@ export function useSessionData(
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [options?.pauseOnHidden])
+  }, [pauseOnHidden])
 
-  // Determine polling interval
+  // Determine polling interval; no polling when tab hidden if pauseOnHidden is true
   const refetchInterval = React.useMemo(() => {
     if (options?.refetchInterval === false) return false
-    if (options?.pauseOnHidden && !isTabVisible) return false
-    return options?.refetchInterval || 3000 // Default 3 seconds
-  }, [options?.refetchInterval, options?.pauseOnHidden, isTabVisible])
+    if (pauseOnHidden && !isTabVisible) return false
+    return options?.refetchInterval ?? 5000 // Default 5s when polling enabled; reduces load vs 3s
+  }, [options?.refetchInterval, pauseOnHidden, isTabVisible])
 
   return useQuery<SessionLiveData>({
     queryKey: ['session', 'live', sessionCode],
     queryFn: async () => {
-      console.log('[useSessionData] ⚠️ FETCHING session data from API', { sessionCode })
-      const res = await fetch(`/api/sessions/${sessionCode}/live`, {
+      const url = `/api/sessions/${sessionCode}/live`
+      logApiFetch('useSessionData', url)
+      const res = await fetch(url, {
         cache: 'no-store',
         credentials: 'include',
       })
 
       if (!res.ok) {
-        // Preserve status code in error message for proper error handling
+        logApiFetch('useSessionData', url, 'error')
         const error = new Error(`Failed to load session: ${res.status}`)
         ;(error as any).status = res.status
         throw error
       }
 
+      logApiFetch('useSessionData', url, 'ok')
       const data = await res.json()
-      console.log('[useSessionData] ✅ Session data fetched from API', { 
-        sessionCode,
-        isActive: data.isActive,
-        participantCount: data.participantCount 
-      })
       return data as SessionLiveData
     },
     enabled: options?.enabled !== false && !!sessionCode,
