@@ -1,6 +1,15 @@
 import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
 
 export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
+  // If schema was already applied (e.g. by dev push), skip to avoid "already exists" on pnpm start
+  const existsResult = await db.execute(
+    sql`SELECT 1 AS "one" FROM pg_type WHERE typname = 'enum_pages_hero_links_link_type' LIMIT 1`,
+  )
+  const rows = (existsResult as { rows?: unknown[] })?.rows
+  if (Array.isArray(rows) && rows.length > 0) {
+    return
+  }
+
   await db.execute(sql`
    CREATE TYPE "public"."enum_pages_hero_links_link_type" AS ENUM('reference', 'custom');
   CREATE TYPE "public"."enum_pages_hero_links_link_appearance" AS ENUM('default', 'outline');
