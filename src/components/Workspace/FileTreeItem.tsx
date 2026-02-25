@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Folder, File as FileIcon, ChevronRight, ChevronDown, X, MoreVertical, Edit2, FolderOpen, Trash2 } from 'lucide-react'
+import { Folder, File as FileIcon, ChevronRight, ChevronDown, X, MoreVertical, Edit2, FolderOpen, Trash2, Loader2 } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { RenameItemModal } from './RenameItemModal'
 import { MoveItemModal } from './MoveItemModal'
@@ -41,6 +41,8 @@ interface FileTreeItemProps {
   allFolders?: Folder[] // For move modal folder picker
   readOnly?: boolean
   level: number
+  deletingFileId?: string | null
+  deletingFolderId?: string | null
 }
 
 export function FileTreeItem({
@@ -58,6 +60,8 @@ export function FileTreeItem({
   allFolders = [],
   readOnly = false,
   level,
+  deletingFileId = null,
+  deletingFolderId = null,
 }: FileTreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -147,12 +151,16 @@ export function FileTreeItem({
       >
         <div
           className="flex items-center gap-1.5 flex-1 cursor-pointer min-w-0"
-          onClick={() => onFileClick(file)}
+          onClick={() => !deletingFileId && onFileClick(file)}
         >
-          <FileIcon className="h-3.5 w-3.5 flex-shrink-0" />
-          <span className="truncate">{file.name}</span>
+          {deletingFileId === file.id ? (
+            <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-muted-foreground" />
+          ) : (
+            <FileIcon className="h-3.5 w-3.5 flex-shrink-0" />
+          )}
+          <span className="truncate">{deletingFileId === file.id ? 'Deleting...' : file.name}</span>
         </div>
-        {!readOnly && (onFileDelete || onFileRename || onFileMove) && isHovered && (
+        {!readOnly && (onFileDelete || onFileRename || onFileMove) && isHovered && !deletingFileId && (
           <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               ref={fileMenuButtonRef}
@@ -199,10 +207,15 @@ export function FileTreeItem({
                   {onFileDelete && (
                     <button
                       onClick={handleFileDelete}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-destructive/20 text-destructive text-left"
+                      disabled={deletingFileId === file.id}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-destructive/20 text-destructive text-left disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Trash2 className="h-3 w-3" />
-                      Delete
+                      {deletingFileId === file.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      {deletingFileId === file.id ? 'Deleting...' : 'Delete'}
                     </button>
                   )}
                 </div>
@@ -251,17 +264,21 @@ export function FileTreeItem({
         >
           <div
             className="flex items-center gap-1 flex-1 cursor-pointer min-w-0"
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={() => !deletingFolderId && setIsExpanded(!isExpanded)}
           >
-            {isExpanded ? (
+            {deletingFolderId === folder.id ? null : isExpanded ? (
               <ChevronDown className="h-3 w-3 flex-shrink-0" />
             ) : (
               <ChevronRight className="h-3 w-3 flex-shrink-0" />
             )}
-            <Folder className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="truncate">{folder.name}</span>
+            {deletingFolderId === folder.id ? (
+              <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-muted-foreground" />
+            ) : (
+              <Folder className="h-3.5 w-3.5 flex-shrink-0" />
+            )}
+            <span className="truncate">{deletingFolderId === folder.id ? 'Deleting...' : folder.name}</span>
           </div>
-          {!readOnly && (onFolderDelete || onFolderRename || onFolderMove) && isHovered && (
+          {!readOnly && (onFolderDelete || onFolderRename || onFolderMove) && isHovered && !deletingFolderId && (
             <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 ref={folderMenuButtonRef}
@@ -308,10 +325,15 @@ export function FileTreeItem({
                     {onFolderDelete && (
                       <button
                         onClick={handleFolderDelete}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-destructive/20 text-destructive text-left"
+                        disabled={deletingFolderId === folder.id}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-destructive/20 text-destructive text-left disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="h-3 w-3" />
-                        Delete
+                        {deletingFolderId === folder.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                        {deletingFolderId === folder.id ? 'Deleting...' : 'Delete'}
                       </button>
                     )}
                   </div>
@@ -361,6 +383,8 @@ export function FileTreeItem({
                 allFolders={allFolders}
                 readOnly={readOnly}
                 level={level + 1}
+                deletingFileId={deletingFileId}
+                deletingFolderId={deletingFolderId}
               />
             ))}
 
@@ -380,6 +404,8 @@ export function FileTreeItem({
                 allFolders={allFolders}
                 readOnly={readOnly}
                 level={level + 1}
+                deletingFileId={deletingFileId}
+                deletingFolderId={deletingFolderId}
               />
             ))}
           </div>

@@ -66,8 +66,8 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
       if (file) {
         setConfirming(true)
         setConfirmLabel('selecting')
-        // Defer so the button re-renders with "Selecting..." before we call onSelect (modal may close)
-        await new Promise((r) => setTimeout(r, 0))
+        // Minimum time so the user always sees "Selecting..." before the modal closes
+        await new Promise((r) => setTimeout(r, 200))
         const language = (file as WorkspaceFileWithFolder & { language?: string }).language ?? 'text'
         const content = (file as WorkspaceFileWithFolder & { content?: string }).content ?? ''
         onSelect(String(file.id), file.name, content, language)

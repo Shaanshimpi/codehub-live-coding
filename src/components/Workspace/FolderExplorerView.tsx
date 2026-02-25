@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { Folder as FolderIcon, File as FileIcon, ArrowLeft, LayoutTemplate, MoreVertical, Edit2, FolderOpen, Trash2, FolderPlus, FilePlus } from 'lucide-react'
+import { Folder as FolderIcon, File as FileIcon, ArrowLeft, LayoutTemplate, MoreVertical, Edit2, FolderOpen, Trash2, FolderPlus, FilePlus, Loader2 } from 'lucide-react'
 
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
@@ -65,6 +65,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
   const [showRenameModal, setShowRenameModal] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)
   const [showMoveModal, setShowMoveModal] = useState<{ type: 'file' | 'folder'; id: string; currentParentId: string | number | null } | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)
+  const [deletingId, setDeletingId] = useState<{ type: 'file' | 'folder'; id: string } | null>(null)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   const [showCreateFile, setShowCreateFile] = useState(false)
 
@@ -135,6 +136,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
   }
 
   const handleDelete = async (type: 'file' | 'folder', id: string) => {
+    setDeletingId({ type, id })
     try {
       const endpoint = type === 'file' ? `/api/files/${id}/delete` : `/api/folders/${id}/delete`
       const res = await fetch(endpoint, {
@@ -150,6 +152,8 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
     } catch (error) {
       console.error(`Failed to delete ${type}:`, error)
       alert(`Failed to delete ${type}`)
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -373,6 +377,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
                         folder={folder}
                         currentFolder={currentFolder}
                         readOnly={readOnly}
+                        isDeleting={deletingId?.type === 'folder' && deletingId?.id === String(folder.id)}
                         onOpenFolder={() => handleOpenFolder(folder)}
                         onOpenInWorkspace={onOpenFolderInWorkspace ? () => onOpenFolderInWorkspace(folder.id) : undefined}
                         onRename={() => setShowRenameModal({ type: 'folder', id: String(folder.id), name: folder.name || 'Untitled' })}
@@ -401,6 +406,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
                         file={file}
                         currentFolder={currentFolder}
                         readOnly={readOnly}
+                        isDeleting={deletingId?.type === 'file' && deletingId?.id === file.id}
                         onOpenFile={() => handleOpenFile(file)}
                         onRename={() => setShowRenameModal({ type: 'file', id: file.id, name: file.name })}
                         onMove={() => setShowMoveModal({ type: 'file', id: file.id, currentParentId: currentFolder?.id || null })}
@@ -490,6 +496,7 @@ function FolderCard({
   folder,
   currentFolder,
   readOnly,
+  isDeleting = false,
   onOpenFolder,
   onOpenInWorkspace,
   onRename,
@@ -499,6 +506,7 @@ function FolderCard({
   folder: Folder
   currentFolder: Folder | null
   readOnly: boolean
+  isDeleting?: boolean
   onOpenFolder: () => void
   onOpenInWorkspace?: () => void
   onRename: () => void
@@ -511,14 +519,18 @@ function FolderCard({
     <div className="group relative flex flex-col justify-between rounded-lg border bg-card px-3 py-2 shadow-sm hover:bg-accent/40 transition-colors" data-testid="folder-item">
       <div className="flex items-center justify-between gap-2">
         <div
-          onClick={onOpenFolder}
+          onClick={isDeleting ? undefined : onOpenFolder}
           className="flex items-center gap-2 flex-1 cursor-pointer min-w-0"
-          title="Open this folder in Explorer view"
+          title={isDeleting ? undefined : 'Open this folder in Explorer view'}
         >
-          <FolderIcon className="h-4 w-4 text-primary" />
-          <span className="truncate text-sm font-medium">{folder.name || 'Untitled'}</span>
+          {isDeleting ? (
+            <Loader2 className="h-4 w-4 text-primary animate-spin" />
+          ) : (
+            <FolderIcon className="h-4 w-4 text-primary" />
+          )}
+          <span className="truncate text-sm font-medium">{isDeleting ? 'Deleting...' : (folder.name || 'Untitled')}</span>
         </div>
-        {!readOnly && (
+        {!readOnly && !isDeleting && (
           <div className="relative">
             <button
               onClick={(e) => {
@@ -579,7 +591,8 @@ function FolderCard({
       <div className="mt-3 flex gap-2">
         <button
           onClick={onOpenFolder}
-          className="flex-1 rounded-md border px-2 py-1 text-xs text-foreground bg-background/60 text-center hover:bg-background transition-colors"
+          disabled={isDeleting}
+          className="flex-1 rounded-md border px-2 py-1 text-xs text-foreground bg-background/60 text-center hover:bg-background transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Open in Explorer
         </button>
@@ -589,16 +602,17 @@ function FolderCard({
               e.stopPropagation()
               onOpenInWorkspace()
             }}
-            className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors text-center"
+            disabled={isDeleting}
+            className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
             title="Open this folder in Workspace editor view"
           >
             Open in Workspace
           </button>
         ) : (
           <Link
-            href={`/workspace/folder/${folder.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors text-center"
+            href={isDeleting ? '#' : `/workspace/folder/${folder.id}`}
+            onClick={(e) => isDeleting && e.preventDefault()}
+            className={`flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors text-center ${isDeleting ? 'pointer-events-none opacity-50' : ''}`}
             title="Open this folder in Workspace editor view"
           >
             Open in Workspace
@@ -614,6 +628,7 @@ function FileCard({
   file,
   currentFolder,
   readOnly,
+  isDeleting = false,
   onOpenFile,
   onRename,
   onMove,
@@ -622,6 +637,7 @@ function FileCard({
   file: WorkspaceFile
   currentFolder: Folder | null
   readOnly: boolean
+  isDeleting?: boolean
   onOpenFile: () => void
   onRename: () => void
   onMove: () => void
@@ -632,11 +648,15 @@ function FileCard({
   return (
     <div className="group flex items-center justify-between rounded-md border bg-card px-3 py-1.5 text-xs" data-testid="file-item">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="truncate">{file.name}</span>
+        {isDeleting ? (
+          <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
+        ) : (
+          <FileIcon className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+        <span className="truncate">{isDeleting ? 'Deleting...' : file.name}</span>
       </div>
       <div className="flex items-center gap-1">
-        {!readOnly && (
+        {!readOnly && !isDeleting && (
           <div className="relative">
             <button
               onClick={(e) => {
@@ -695,7 +715,8 @@ function FileCard({
         )}
         <button
           onClick={onOpenFile}
-          className="ml-2 rounded-md border px-2 py-0.5 text-[10px] hover:bg-accent transition-colors"
+          disabled={isDeleting}
+          className="ml-2 rounded-md border px-2 py-0.5 text-[10px] hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Open this file in Workspace editor view"
         >
           Open

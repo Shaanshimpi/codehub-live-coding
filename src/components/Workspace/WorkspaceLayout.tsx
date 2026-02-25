@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { Radio, Download, Upload } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Radio, Download, Upload, Loader2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { invalidateWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
 import { usePaymentStatus, type PaymentStatus } from '@/hooks/payment/usePaymentStatus'
@@ -50,6 +51,8 @@ interface WorkspaceLayoutProps {
 
 export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: WorkspaceLayoutProps = {}) {
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const [navigatingToJoin, setNavigatingToJoin] = useState(false)
   const [code, setCode] = useState('')
   const [language, setLanguage] = useState('javascript')
   const [showAI, setShowAI] = useState(false)
@@ -339,13 +342,22 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                   className="hidden"
                 />
               </label>
-              <Link
-                href="/join"
-                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              <button
+                type="button"
+                onClick={() => {
+                  setNavigatingToJoin(true)
+                  router.push('/join')
+                }}
+                disabled={navigatingToJoin}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Radio className="h-4 w-4" />
-                Join Live Session
-              </Link>
+                {navigatingToJoin ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Radio className="h-4 w-4" />
+                )}
+                <span>{navigatingToJoin ? 'Opening...' : 'Join Live Session'}</span>
+              </button>
             </>
           }
           data-testid="workspace-header"

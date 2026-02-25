@@ -11,11 +11,11 @@ import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
 
 type WorkspaceFile = WorkspaceFileWithFolder
 
-// Local File type for onFileSelect callback (includes content)
+// Local File type for onFileSelect callback (content optional - when omitted, useFileSelection will fetch)
 interface FileWithContent {
   id: string
   name: string
-  content: string
+  content?: string
   folder?: {
     id: string | number
     name?: string | null
@@ -58,6 +58,8 @@ export const FileExplorer = React.memo(function FileExplorer({
   const { folders, files, isLoading, refetch } = useWorkspaceData(userId)
   const [showCreateFolder, setShowCreateFolder] = useState(false)
   const [showCreateFile, setShowCreateFile] = useState(false)
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null)
+  const [deletingFolderId, setDeletingFolderId] = useState<string | null>(null)
 
   // Debug: Log component mount/unmount
   React.useEffect(() => {
@@ -83,12 +85,10 @@ export const FileExplorer = React.memo(function FileExplorer({
   }, [refreshTrigger, queryClient, userId])
 
   const handleFileClick = (file: WorkspaceFile) => {
-    // Convert WorkspaceFile to FileWithContent for callback
-    // Note: content will be fetched separately via useFileContent hook
+    // Pass id and name only; content is omitted so useFileSelection fetches via React Query
     onFileSelect({
       id: file.id,
       name: file.name,
-      content: '', // Content will be fetched when file is selected
       folder: file.folder || undefined,
     })
   }
@@ -109,6 +109,7 @@ export const FileExplorer = React.memo(function FileExplorer({
   }
 
   const handleFileDelete = async (fileId: string) => {
+    setDeletingFileId(fileId)
     try {
       const res = await fetch(`/api/files/${fileId}/delete`, {
         method: 'DELETE',
@@ -123,10 +124,13 @@ export const FileExplorer = React.memo(function FileExplorer({
     } catch (error) {
       console.error('Failed to delete file:', error)
       alert('Failed to delete file')
+    } finally {
+      setDeletingFileId(null)
     }
   }
 
   const handleFolderDelete = async (folderId: string) => {
+    setDeletingFolderId(folderId)
     try {
       const res = await fetch(`/api/folders/${folderId}/delete`, {
         method: 'DELETE',
@@ -141,6 +145,8 @@ export const FileExplorer = React.memo(function FileExplorer({
     } catch (error) {
       console.error('Failed to delete folder:', error)
       alert('Failed to delete folder')
+    } finally {
+      setDeletingFolderId(null)
     }
   }
 
@@ -396,6 +402,8 @@ export const FileExplorer = React.memo(function FileExplorer({
                 allFolders={convertedFolders}
                 readOnly={readOnly}
                 level={0}
+                deletingFileId={deletingFileId}
+                deletingFolderId={deletingFolderId}
               />
             ))}
 
@@ -415,6 +423,8 @@ export const FileExplorer = React.memo(function FileExplorer({
                 allFolders={convertedFolders}
                 readOnly={readOnly}
                 level={0}
+                deletingFileId={deletingFileId}
+                deletingFolderId={deletingFolderId}
               />
             ))}
           </>
