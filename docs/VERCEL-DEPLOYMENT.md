@@ -1,35 +1,39 @@
 # Vercel deployment
 
-## If the build hangs (e.g. 30+ min)
+## If the build hangs on “Would you like to proceed? (y/N)”
 
-The build can hang if Payload’s migration step shows an interactive prompt (“Would you like to proceed?”) and waits for input. Vercel runs non-interactively, so it never answers and the build never finishes.
+Payload’s migrate step shows an interactive prompt when it finds a **dev-pushed** migration record (`batch = -1`) in `payload_migrations`. Vercel runs non-interactively, so it never answers and the build hangs. **Payload does not check `PAYLOAD_MIGRATING` or `CI` before showing this prompt** — the only fix is to remove that record from the database.
 
-### 1. Environment variables (Vercel)
+### 1. Required: run this SQL on your Postgres database
 
-In **Project → Settings → Environment Variables**, add for **Build** (and Production if you use them at runtime):
-
-- **`PAYLOAD_MIGRATING`** = `1`  
-  Use this so migration-related logic runs in a non-interactive way.
-- **`CI`** = `1`  
-  Many tools skip interactive prompts when `CI` is set.
-- **`DATABASE_URL`**  
-  Must be set and correct. Prefer `sslmode=verify-full` in the query string to avoid SSL warnings and future pg v3 changes:
-  - Good: `postgresql://user:pass@host/db?sslmode=verify-full`
-  - The app will also normalize `sslmode=require` (and similar) to `verify-full` at runtime.
-
-Redeploy after adding or changing these.
-
-### 2. One-time fix if the DB was used in dev with “push”
-
-If you previously ran the app in **development** against the same database, Payload may have “pushed” the schema (batch = -1). When migrations run in production they detect that and prompt, which causes the hang.
-
-**One-time fix:** run this SQL on your Postgres database (e.g. in Neon’s SQL editor):
+Run this **once** on the same database your Vercel app uses (e.g. Neon SQL editor, TablePlus, or `psql`):
 
 ```sql
 DELETE FROM payload_migrations WHERE batch = -1;
 ```
 
-Then redeploy. After that, only real migrations (batch ≥ 0) exist and the prompt should not appear.
+If your schema was applied by dev push (so tables/enums already exist), also mark the initial migration as applied so the app doesn’t try to run it and hit “already exists” on first start:
+
+```sql
+INSERT INTO payload_migrations (name, batch, updated_at, created_at)
+VALUES ('20260127_102817_initial_schema', 1, now(), now());
+```
+
+(Run the INSERT only once; skip it if that migration name already exists in the table.)
+
+Then trigger a new deploy. After this, the prompt will not appear and the build can finish.
+
+### 2. Environment variables (Vercel)
+
+In **Project → Settings → Environment Variables**, for **Build** (and Production if needed):
+
+- **`DATABASE_URL`**  
+  Must be set. Prefer `sslmode=verify-full` to avoid SSL warnings:
+  - Example: `postgresql://user:pass@host/db?sslmode=verify-full`
+- **`PAYLOAD_MIGRATING`** = `1`  
+  Stops the adapter from doing a dev schema push in non-production; does **not** skip the “Would you like to proceed?” prompt (that is only fixed by the SQL above).
+- **`CI`** = `1`  
+  Optional; some tooling skips prompts when this is set.
 
 ### 3. What was changed in the repo
 
