@@ -162,8 +162,16 @@ export function StudentSessionWorkspace({
     selectedFile,
     syncToSession: true,
     sessionSyncType: 'scratchpad',
-    lastSavedCode,
   })
+
+  // Run and save simultaneously; run is not blocked by save
+  const handleSaveAndRun = useCallback(
+    async (runCode: string, input?: string) => {
+      if (code !== lastSavedCode) void saveCurrentFile()
+      await handleRun(runCode, input)
+    },
+    [code, lastSavedCode, saveCurrentFile, handleRun]
+  )
 
   /**
    * Legacy behavior (requested):
@@ -712,12 +720,13 @@ export function StudentSessionWorkspace({
                       language={language}
                       onLanguageChange={setLanguage}
                       onChange={setCode}
-                      onRun={handleRun}
+                      onRun={handleSaveAndRun}
                       executing={executing}
                       executionResult={executionResult}
                       onSave={() => setRefreshKey((prev) => prev + 1)}
                       hideSaveButton={true}
-                      runDisabled={code !== lastSavedCode}
+                      runDisabled={false}
+                      runButtonLabel="Save and Run"
                     />
                   </>
                 ) : (

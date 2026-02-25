@@ -5,12 +5,12 @@
  * - Code execution via useCodeExecution
  * - Session broadcast (trainer) via /api/sessions/${sessionCode}/broadcast
  * - Session sync (student) via /api/sessions/${sessionCode}/scratchpad
- * - lastSavedCode check (prevent running unsaved code)
+ * - Optional save-before-run is handled by the parent (session workspace)
  * 
  * @module useWorkspaceCodeExecution
  */
 
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useCodeExecution } from '@/hooks/useCodeExecution'
 import type { ExecutionResult } from '@/services/codeExecution'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
@@ -28,8 +28,6 @@ interface UseWorkspaceCodeExecutionOptions {
   syncToSession?: boolean
   /** Session sync type: 'broadcast' for trainer, 'scratchpad' for student */
   sessionSyncType?: 'broadcast' | 'scratchpad'
-  /** Last saved code content (for preventing unsaved code execution) */
-  lastSavedCode?: string
   /** Callback after execution completes */
   onExecutionComplete?: (result: ExecutionResult) => void
 }
@@ -39,7 +37,7 @@ interface UseWorkspaceCodeExecutionReturn {
   executing: boolean
   /** Last execution result */
   executionResult: ExecutionResult | null
-  /** Run code with optional input (checks lastSavedCode if provided) */
+  /** Run code with optional input */
   handleRun: (currentCode: string, input?: string) => Promise<void>
   /** Clear the execution result */
   clearResult: () => void
@@ -61,7 +59,6 @@ interface UseWorkspaceCodeExecutionReturn {
  *   selectedFile: currentFile,
  *   syncToSession: true,
  *   sessionSyncType: 'broadcast',
- *   lastSavedCode: lastSavedCode,
  *   onExecutionComplete: (result) => {
  *     console.log('Execution completed', result)
  *   }
@@ -74,12 +71,13 @@ export function useWorkspaceCodeExecution({
   selectedFile,
   syncToSession = false,
   sessionSyncType = 'broadcast',
-  lastSavedCode,
   onExecutionComplete,
 }: UseWorkspaceCodeExecutionOptions): UseWorkspaceCodeExecutionReturn {
+  const lastExecutedCodeRef = useRef<string>('')
+
   const { execute, executing, result: executionResult, clearResult } = useCodeExecution({
     onExecutionComplete: async (result) => {
-      // Sync to session if configured
+      // Sync to session if configured (include code + output so trainer sees both on refresh)
       if (syncToSession && sessionCode && selectedFile) {
         try {
           const syncEndpoint =
@@ -93,6 +91,7 @@ export function useWorkspaceCodeExecution({
                   workspaceFileId: selectedFile.id,
                   workspaceFileName: selectedFile.name,
                   language,
+                  code: lastExecutedCodeRef.current,
                   output: result,
                 }
               : {
@@ -130,15 +129,7 @@ export function useWorkspaceCodeExecution({
 
   const handleRun = useCallback(
     async (currentCode: string, input?: string): Promise<void> => {
-      // Prevent running if there are unsaved changes (if lastSavedCode is provided)
-      if (lastSavedCode !== undefined && currentCode !== lastSavedCode) {
-        console.warn('[useWorkspaceCodeExecution] Cannot run: code has unsaved changes', {
-          currentCodeLength: currentCode.length,
-          lastSavedCodeLength: lastSavedCode.length,
-        })
-        return
-      }
-
+      lastExecutedCodeRef.current = currentCode
       console.log('[useWorkspaceCodeExecution] Running code...', {
         language,
         codeLength: currentCode.length,
@@ -149,7 +140,7 @@ export function useWorkspaceCodeExecution({
 
       await execute(language, currentCode, input)
     },
-    [language, execute, lastSavedCode, sessionCode, syncToSession]
+    [language, execute, sessionCode, syncToSession]
   )
 
   return {

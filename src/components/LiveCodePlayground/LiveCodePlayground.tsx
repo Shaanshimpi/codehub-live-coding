@@ -22,6 +22,7 @@ export function LiveCodePlayground({
   theme: themeProp,
   runDisabled = false,
   allowRunInReadOnly = false,
+  runButtonLabel = 'Run',
 }: LiveCodePlaygroundProps) {
   const editorRef = useRef<any>(null)
   const executedCodeRef = useRef<string>('') // Track the code that was executed
@@ -377,7 +378,7 @@ export function LiveCodePlayground({
                   ? 'Stop execution'
                   : runDisabled
                     ? 'Please save your code before running'
-                    : 'Run code (Ctrl+Enter)'
+                    : `${runButtonLabel} (Ctrl+Enter)`
               }
             >
               {executing ? (
@@ -388,7 +389,7 @@ export function LiveCodePlayground({
               ) : (
                 <>
                   <Play className="h-3 w-3" />
-                  <span>Run</span>
+                  <span>{runButtonLabel}</span>
                 </>
               )}
             </button>

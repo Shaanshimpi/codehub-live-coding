@@ -32,6 +32,8 @@ export interface LiveCodePlaygroundProps {
   theme?: 'vs-dark' | 'vs'
   runDisabled?: boolean // Disable Run button (e.g., when code has unsaved changes)
   allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
+  /** Run button label (e.g. "Save and Run" in session) */
+  runButtonLabel?: string
 }
 
 export const SUPPORTED_LANGUAGES: Language[] = [

@@ -164,9 +164,7 @@ export function useFileSelection({
     // Use React Query to fetch file content (will use cache if available)
     console.log('[useFileSelection] Using React Query to fetch file content', { fileId: file.id })
     setSelectedFileId(fileIdStr) // React Query will fetch and cache automatically
-    // Reset the ref when explicitly selecting a file
-    lastLoadedFileIdRef.current = fileIdStr
-    // The useEffect above will update selectedFile when query completes
+    // Do not set lastLoadedFileIdRef here: the useEffect will set it when the query completes and we apply content
   }, [selectedFile, autoSaveBeforeSwitch, saveCurrentFile, onFileChanged])
 
   const handleFileSelectFromModal = useCallback(async (

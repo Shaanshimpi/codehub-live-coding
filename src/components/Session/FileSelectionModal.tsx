@@ -21,6 +21,7 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
   const [selectedFolder, setSelectedFolder] = useState<string>('')
   const [showCreateFile, setShowCreateFile] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [confirmLabel, setConfirmLabel] = useState<'selecting' | 'creating' | null>(null)
 
   const folderById = React.useMemo(() => {
     const map = new Map<string, Folder>()
@@ -63,12 +64,19 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
     if (selectedOption === 'workspace' && selectedFileId) {
       const file = files.find((f) => String(f.id) === selectedFileId)
       if (file) {
+        setConfirming(true)
+        setConfirmLabel('selecting')
+        // Defer so the button re-renders with "Selecting..." before we call onSelect (modal may close)
+        await new Promise((r) => setTimeout(r, 0))
         const language = (file as WorkspaceFileWithFolder & { language?: string }).language ?? 'text'
         const content = (file as WorkspaceFileWithFolder & { content?: string }).content ?? ''
         onSelect(String(file.id), file.name, content, language)
+        setConfirming(false)
+        setConfirmLabel(null)
       }
     } else if (showCreateFile && newFileName.trim()) {
       setConfirming(true)
+      setConfirmLabel('creating')
       try {
         const numericFolderId = selectedFolder ? Number(selectedFolder) : null
 
@@ -112,6 +120,7 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
         alert('Failed to create file')
       } finally {
         setConfirming(false)
+        setConfirmLabel(null)
       }
     }
   }
@@ -273,7 +282,7 @@ export const FileSelectionModal = React.memo(function FileSelectionModal({ isOpe
             {confirming ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Creating...</span>
+                <span>{confirmLabel === 'selecting' ? 'Selecting...' : 'Creating...'}</span>
               </>
             ) : (
               'Confirm'

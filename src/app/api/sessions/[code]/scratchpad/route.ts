@@ -40,15 +40,15 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { code: scratchpadCode, language, output, workspaceFileId } = body as {
-      code?: string // Legacy: kept for backward compatibility
+    const { code: scratchpadCode, language, output, workspaceFileId, workspaceFileName: bodyWorkspaceFileName } = body as {
+      code?: string
       language?: string
       output?: unknown
-      workspaceFileId?: string // New: primary way to sync file
+      workspaceFileId?: string
+      workspaceFileName?: string
     }
 
-    // NEW SYSTEM: If workspaceFileId is provided, use it (code will be fetched from file)
-    // LEGACY: If no workspaceFileId, require code and language
+    // When workspaceFileId is omitted, require code and language (legacy)
     if (!workspaceFileId) {
       if (typeof scratchpadCode !== 'string' || typeof language !== 'string') {
         return NextResponse.json(
@@ -82,24 +82,20 @@ export async function POST(
     // Get or initialize student scratchpads
     const scratchpads = (session.studentScratchpads as Record<string, any>) || {}
     
-    // Get workspace file info if workspaceFileId is provided
-    let workspaceFileName = null
-    let fileContent = scratchpadCode || ''
-    let fileLanguage = language || 'javascript'
+    // Use code and workspaceFileName from body when provided (keeps code + output in sync without stale file fetch)
+    let workspaceFileName: string | null = typeof bodyWorkspaceFileName === 'string' ? bodyWorkspaceFileName : null
+    let fileContent = typeof scratchpadCode === 'string' ? scratchpadCode : ''
+    let fileLanguage = typeof language === 'string' ? language : 'javascript'
     
-    if (workspaceFileId) {
+    if (workspaceFileId && (fileContent === '' || workspaceFileName === null)) {
       try {
         const file = await payload.findByID({
           collection: 'files',
           id: workspaceFileId,
         })
-        workspaceFileName = file.name
-        // Fetch file content if not provided in request
-        if (!scratchpadCode && file.content) {
-          fileContent = file.content
-        }
-        // Infer language from file extension if not provided
-        if (!language && file.name) {
+        if (workspaceFileName === null) workspaceFileName = file.name
+        if (fileContent === '' && file.content) fileContent = file.content
+        if (fileLanguage === 'javascript' && file.name) {
           const parts = file.name.split('.')
           const ext = parts.length > 1 ? parts.pop()!.toLowerCase() : ''
           if (ext) {
@@ -112,7 +108,7 @@ export async function POST(
           }
         }
       } catch {
-        // File might not exist, use provided code/language or defaults
+        // File might not exist, use provided or defaults
       }
     }
     

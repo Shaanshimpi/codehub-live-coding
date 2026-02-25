@@ -5,13 +5,13 @@ import Link from 'next/link'
 import { FileExplorer } from '@/components/Workspace/FileExplorer'
 import { WorkspaceEditor } from '@/components/Workspace/WorkspaceEditor'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
-import { LiveCodePlayground } from '@/components/LiveCodePlayground'
+import { SimpleCodeViewer } from '@/components/Session/SimpleCodeViewer'
 import { AIAssistantPanel } from '@/components/AIAssistant'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
 import { inferLanguageFromFileName } from '@/utilities/languageInference'
 import { WorkspaceViewControls } from '@/components/Workspace/WorkspaceViewControls'
-import { Radio, RefreshCw, X, Users, ChevronDown, ChevronUp, Loader2, ArrowLeft } from 'lucide-react'
+import { Radio, RefreshCw, X, Users, ChevronDown, ChevronUp, Loader2, ArrowLeft, Play } from 'lucide-react'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import { cn } from '@/utilities/ui'
@@ -93,6 +93,8 @@ export function TrainerSessionWorkspace({
     executing: boolean
     executionResult: ExecutionResult | null
   }>>({})
+  // Input (stdin) per student for trainer when testing student code
+  const [studentRunInputs, setStudentRunInputs] = useState<Record<string, string>>({})
   
   const { theme: appTheme } = useTheme()
 
@@ -175,8 +177,16 @@ export function TrainerSessionWorkspace({
     selectedFile,
     syncToSession: true,
     sessionSyncType: 'broadcast',
-    lastSavedCode,
   })
+
+  // Run and save simultaneously; run is not blocked by save
+  const handleSaveAndRun = useCallback(
+    async (runCode: string, input?: string) => {
+      if (code !== lastSavedCode) void saveCurrentFile()
+      await handleRun(runCode, input)
+    },
+    [code, lastSavedCode, saveCurrentFile, handleRun]
+  )
 
   // Explorer data for explorer mode
   const {
@@ -525,55 +535,63 @@ export function TrainerSessionWorkspace({
                     </button>
                     {isExpanded && (
                       <div className="border-t p-2 space-y-2">
-                        {/* Local editable code editor */}
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <div className="text-[10px] font-medium text-muted-foreground">
-                              Code (Local Edit - Not Synced):
-                            </div>
-                            <select
-                              value={localStudentEdits[student.userId]?.language || student.language || 'javascript'}
-                              onChange={(e) => handleStudentLanguageChange(student.userId, e.target.value)}
-                              className="rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
-                            >
-                              {SUPPORTED_LANGUAGES.map((lang) => (
-                                <option key={lang.id} value={lang.id}>
-                                  {lang.name}
-                                </option>
-                              ))}
-                            </select>
+                            <span className="text-[10px] font-medium text-muted-foreground">
+                              Code (from session — refresh to update):
+                            </span>
+                            <span className="text-[10px] text-muted-foreground capitalize">
+                              {student.language || 'javascript'}
+                            </span>
                           </div>
-                          <div className="h-64 border rounded-md overflow-hidden">
-                            <LiveCodePlayground
-                              language={localStudentEdits[student.userId]?.language || student.language || 'javascript'}
-                              code={(localStudentEdits[student.userId]?.code ?? student.code) || '// No code yet'}
-                              onChange={(newCode) => handleStudentCodeChange(student.userId, newCode)}
-                              onRun={(currentCode, input) => {
-                                const lang = localStudentEdits[student.userId]?.language || student.language || 'javascript'
-                                handleStudentCodeRun(student.userId, currentCode, lang, input)
-                              }}
-                              readOnly={false}
-                              theme={appTheme === 'dark' ? 'vs-dark' : 'vs'}
-                              height="100%"
-                              runDisabled={false}
-                              executing={localStudentEdits[student.userId]?.executing || false}
-                              executionResult={localStudentEdits[student.userId]?.executionResult || null}
-                              onStopExecution={() => {
-                                setLocalStudentEdits((prev) => ({
+                          <SimpleCodeViewer
+                            code={student.code || '// No code yet'}
+                            language={student.language || 'javascript'}
+                          />
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-medium text-muted-foreground">
+                              Input (stdin) for Run:
+                            </label>
+                            <textarea
+                              value={studentRunInputs[student.userId] ?? ''}
+                              onChange={(e) =>
+                                setStudentRunInputs((prev) => ({
                                   ...prev,
-                                  [student.userId]: {
-                                    ...prev[student.userId],
-                                    executing: false,
-                                  },
+                                  [student.userId]: e.target.value,
                                 }))
-                              }}
+                              }
+                              placeholder="Optional: input to pass to stdin when running..."
+                              className="w-full min-h-[4rem] rounded-md border bg-background px-2 py-1.5 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring resize-y"
+                              rows={2}
                             />
                           </div>
-                          {/* Local execution output */}
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleStudentCodeRun(
+                                  student.userId,
+                                  student.code || '',
+                                  student.language || 'javascript',
+                                  (studentRunInputs[student.userId] ?? '').trim() || undefined
+                                )
+                              }
+                              disabled={localStudentEdits[student.userId]?.executing}
+                              className="flex items-center gap-1 rounded-md bg-success px-2 py-1 text-xs font-medium text-success-foreground hover:bg-success/90 disabled:opacity-50"
+                            >
+                              {localStudentEdits[student.userId]?.executing ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3" />
+                              )}
+                              Run
+                            </button>
+                          </div>
+                          {/* Local run output (when trainer clicks Run) */}
                           {localStudentEdits[student.userId]?.executionResult && (
                             <div className="border rounded-md bg-muted/30">
                               <div className="text-[10px] font-medium text-muted-foreground p-2 border-b">
-                                Local Execution Output:
+                                Run output:
                               </div>
                               <OutputPanel
                                 result={localStudentEdits[student.userId]!.executionResult}
@@ -590,11 +608,11 @@ export function TrainerSessionWorkspace({
                               />
                             </div>
                           )}
-                          {/* Original student output (if exists) - show as reference */}
+                          {/* Student's output from session (Save and Run) */}
                           {student.output && (
                             <div className="border rounded-md bg-muted/10">
                               <div className="text-[10px] font-medium text-muted-foreground p-2 border-b">
-                                Student&apos;s Original Output (Reference):
+                                Student&apos;s output (from session):
                               </div>
                               <div className="text-xs font-mono bg-muted/30 p-2 max-h-32 overflow-y-auto">
                                 {student.output.stdout && (
@@ -705,11 +723,12 @@ export function TrainerSessionWorkspace({
                   language={language}
                   onLanguageChange={setLanguage}
                   onChange={setCode}
-                  onRun={handleRun}
+                  onRun={handleSaveAndRun}
                   executing={executing}
                   onSave={() => setRefreshKey((prev) => prev + 1)}
                   hideSaveButton={true}
-                  runDisabled={code !== lastSavedCode}
+                  runDisabled={false}
+                  runButtonLabel="Save and Run"
                 />
               </>
             ) : (

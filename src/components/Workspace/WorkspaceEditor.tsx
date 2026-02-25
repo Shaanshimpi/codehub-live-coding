@@ -21,6 +21,8 @@ interface WorkspaceEditorProps {
   runDisabled?: boolean // Disable Run button (e.g., when code has unsaved changes)
   executionResult?: ExecutionResult | null // Execution result to display
   allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
+  /** Run button label (e.g. "Save and Run" in session) */
+  runButtonLabel?: string
 }
 
 export function WorkspaceEditor({
@@ -38,6 +40,7 @@ export function WorkspaceEditor({
   runDisabled = false,
   executionResult = null,
   allowRunInReadOnly = false,
+  runButtonLabel,
 }: WorkspaceEditorProps) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -165,6 +168,7 @@ export function WorkspaceEditor({
           readOnly={readOnly}
           runDisabled={runDisabled}
           allowRunInReadOnly={allowRunInReadOnly}
+          runButtonLabel={runButtonLabel}
         />
       </div>
     </div>
