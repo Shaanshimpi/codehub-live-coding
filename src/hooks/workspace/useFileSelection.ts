@@ -30,6 +30,8 @@ interface UseFileSelectionOptions {
   autoSaveBeforeSwitch?: boolean
   /** Function to save current file (required if autoSaveBeforeSwitch is true) */
   saveCurrentFile?: () => Promise<boolean>
+  /** Optional predicate to determine if current file has unsaved changes */
+  hasUnsavedChanges?: () => boolean
 }
 
 interface UseFileSelectionReturn {
@@ -46,8 +48,10 @@ interface UseFileSelectionReturn {
     content: string,
     fileLanguage: string
   ) => Promise<void>
-  /** Whether file is currently switching */
+  /** Whether file is currently switching (saving before switch or fetching content) */
   switchingFile: boolean
+  /** Whether file content is being loaded (e.g. from API) */
+  loadingFile: boolean
   /** Refresh key for file explorer */
   refreshKey: number
   /** Set refresh key */
@@ -78,6 +82,7 @@ export function useFileSelection({
   onFileChanged,
   autoSaveBeforeSwitch = false,
   saveCurrentFile,
+  hasUnsavedChanges,
 }: UseFileSelectionOptions = {}): UseFileSelectionReturn {
   const [selectedFile, setSelectedFileState] = useState<WorkspaceFile | null>(null)
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null)
@@ -106,6 +111,7 @@ export function useFileSelection({
         }
         setSelectedFileState(newFile)
         lastLoadedFileIdRef.current = fileContent.id
+        setSwitchingFile(false)
         if (onFileChanged) {
           onFileChanged(newFile)
         }
@@ -114,6 +120,7 @@ export function useFileSelection({
           fileName: fileContent.name,
         })
       } else {
+        setSwitchingFile(false)
         console.log('[useFileSelection] File content refetched (same file), skipping state update to preserve user edits', {
           fileId: fileContent.id,
         })
@@ -122,26 +129,30 @@ export function useFileSelection({
   }, [fileContent, onFileChanged])
 
   const handleFileSelect = useCallback(async (file: { id: string; name?: string; content?: string }) => {
+    const fileIdStr = String(file.id)
+    const isDifferentFile = !selectedFile || fileIdStr !== String(selectedFile.id)
+
     console.log('[useFileSelection] File selection started', { fileId: file.id, fileName: file.name || 'unknown' })
 
-    // Auto-save current file before switching (if enabled and changed)
-    if (autoSaveBeforeSwitch && selectedFile && saveCurrentFile) {
-      const currentContent = selectedFile.content || ''
-      const newContent = file.content || ''
-      if (newContent !== currentContent) {
-        console.log('[useFileSelection] Auto-saving current file before switch')
-        setSwitchingFile(true)
-        try {
-          await saveCurrentFile()
-        } catch (error) {
-          console.error('[useFileSelection] Failed to save before switching:', error)
-        } finally {
-          setSwitchingFile(false)
-        }
+    // Auto-save current file before switching to a different file (if enabled and dirty)
+    const shouldAutoSave =
+      autoSaveBeforeSwitch &&
+      selectedFile &&
+      saveCurrentFile &&
+      isDifferentFile &&
+      (!hasUnsavedChanges || hasUnsavedChanges())
+
+    if (shouldAutoSave) {
+      console.log('[useFileSelection] Auto-saving current file before switch')
+      setSwitchingFile(true)
+      try {
+        await saveCurrentFile()
+      } catch (error) {
+        console.error('[useFileSelection] Failed to save before switching:', error)
+      } finally {
+        setSwitchingFile(false)
       }
     }
-
-    const fileIdStr = String(file.id)
 
     // Check if content is already available (from list API with includeContent=true)
     if (file.content !== undefined && file.name) {
@@ -163,9 +174,10 @@ export function useFileSelection({
 
     // Use React Query to fetch file content (will use cache if available)
     console.log('[useFileSelection] Using React Query to fetch file content', { fileId: file.id })
+    setSwitchingFile(true)
     setSelectedFileId(fileIdStr) // React Query will fetch and cache automatically
-    // Do not set lastLoadedFileIdRef here: the useEffect will set it when the query completes and we apply content
-  }, [selectedFile, autoSaveBeforeSwitch, saveCurrentFile, onFileChanged])
+    // useEffect will set switchingFile false when fileContent is applied
+  }, [selectedFile, autoSaveBeforeSwitch, saveCurrentFile, hasUnsavedChanges, onFileChanged])
 
   const handleFileSelectFromModal = useCallback(async (
     fileId: string | null,
@@ -252,6 +264,7 @@ export function useFileSelection({
     handleFileSelect,
     handleFileSelectFromModal,
     switchingFile,
+    loadingFile,
     refreshKey,
     setRefreshKey,
   }

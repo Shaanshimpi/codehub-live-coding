@@ -30,6 +30,7 @@ import { WorkspaceEditorHeader } from '@/components/Workspace/WorkspaceEditorHea
 import { useExplorerData } from '@/hooks/workspace/useExplorerData'
 import { useFileSelection } from '@/hooks/workspace/useFileSelection'
 import { useSaveCode } from '@/hooks/workspace/useSaveCode'
+import { useSaveAndRun } from '@/hooks/workspace/useSaveAndRun'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { SessionMetadataModal } from '@/components/Session/SessionMetadataModal'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
@@ -103,12 +104,13 @@ export function TrainerSessionWorkspace({
   // Ref to store latest handleFileSelect to avoid stale closure in useEffect
   const handleFileSelectRef = useRef<((file: { id: string; name?: string; content?: string }) => Promise<void>) | null>(null)
 
-  // File selection management with auto-save
+  // File selection management with auto-save and loading state
   const {
     selectedFile,
     handleFileSelect: hookHandleFileSelect,
     handleFileSelectFromModal: hookHandleFileSelectFromModal,
     switchingFile,
+    loadingFile,
     refreshKey,
     setRefreshKey,
   } = useFileSelection({
@@ -121,6 +123,7 @@ export function TrainerSessionWorkspace({
       }
       return false
     },
+    hasUnsavedChanges: () => selectedFile != null && code !== lastSavedCode,
     onFileChanged: (file) => {
       // Update code and language when file changes
       setCode(file.content || '')
@@ -179,14 +182,13 @@ export function TrainerSessionWorkspace({
     sessionSyncType: 'broadcast',
   })
 
-  // Run and save simultaneously; run is not blocked by save
-  const handleSaveAndRun = useCallback(
-    async (runCode: string, input?: string) => {
-      if (code !== lastSavedCode) void saveCurrentFile()
-      await handleRun(runCode, input)
-    },
-    [code, lastSavedCode, saveCurrentFile, handleRun]
-  )
+  // Save and run (shared hook: save if dirty then run, simultaneous)
+  const handleSaveAndRun = useSaveAndRun({
+    code,
+    lastSavedCode,
+    saveCurrentFile,
+    handleRun,
+  })
 
   // Explorer data for explorer mode
   const {
@@ -687,9 +689,12 @@ export function TrainerSessionWorkspace({
           fileExplorer={
             <FileExplorerSidebar
               loadingOverlay={
-                <FileSwitchingOverlay visible={switchingFile} />
+                <FileSwitchingOverlay
+                  visible={true}
+                  message={switchingFile ? 'Saving current file...' : 'Loading file...'}
+                />
               }
-              overlayVisible={switchingFile}
+              overlayVisible={switchingFile || loadingFile}
             >
               <FileExplorer
                 key={refreshKey}

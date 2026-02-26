@@ -19,6 +19,7 @@ import { WorkspaceEditorHeader } from '@/components/Workspace/WorkspaceEditorHea
 import { useExplorerData } from '@/hooks/workspace/useExplorerData'
 import { useFileSelection } from '@/hooks/workspace/useFileSelection'
 import { useSaveCode } from '@/hooks/workspace/useSaveCode'
+import { useSaveAndRun } from '@/hooks/workspace/useSaveAndRun'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { executeCode, type ExecutionResult } from '@/services/codeExecution'
 import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
@@ -93,12 +94,13 @@ export function StudentSessionWorkspace({
   // Refs for saveCurrentFile to avoid circular dependency
   const saveCurrentFileRef = useRef<(() => Promise<boolean>) | null>(null)
 
-  // File selection management with auto-save
+  // File selection management with auto-save and loading state
   const {
     selectedFile,
     handleFileSelect: hookHandleFileSelect,
     handleFileSelectFromModal: hookHandleFileSelectFromModal,
     switchingFile,
+    loadingFile,
     refreshKey,
     setRefreshKey,
   } = useFileSelection({
@@ -111,6 +113,7 @@ export function StudentSessionWorkspace({
       }
       return false
     },
+    hasUnsavedChanges: () => selectedFile != null && code !== lastSavedCode,
     onFileChanged: (file) => {
       // Update code and language when file changes
       setCode(file.content || '')
@@ -164,14 +167,13 @@ export function StudentSessionWorkspace({
     sessionSyncType: 'scratchpad',
   })
 
-  // Run and save simultaneously; run is not blocked by save
-  const handleSaveAndRun = useCallback(
-    async (runCode: string, input?: string) => {
-      if (code !== lastSavedCode) void saveCurrentFile()
-      await handleRun(runCode, input)
-    },
-    [code, lastSavedCode, saveCurrentFile, handleRun]
-  )
+  // Save and run (shared hook: save if dirty then run, simultaneous)
+  const handleSaveAndRun = useSaveAndRun({
+    code,
+    lastSavedCode,
+    saveCurrentFile,
+    handleRun,
+  })
 
   /**
    * Legacy behavior (requested):
@@ -685,9 +687,12 @@ export function StudentSessionWorkspace({
               fileExplorer={
                 <FileExplorerSidebar
                   loadingOverlay={
-                    <FileSwitchingOverlay visible={switchingFile} />
+                    <FileSwitchingOverlay
+                      visible={true}
+                      message={switchingFile ? 'Saving current file...' : 'Loading file...'}
+                    />
                   }
-                  overlayVisible={switchingFile}
+                  overlayVisible={switchingFile || loadingFile}
                 >
                   <FileExplorer
                     key={refreshKey}

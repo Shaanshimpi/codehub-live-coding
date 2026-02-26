@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface UseFileSaveOptions {
   /** Optional session code for syncing to session */
@@ -33,6 +34,7 @@ interface UseFileSaveReturn {
 export function useFileSave(options: UseFileSaveOptions = {}): UseFileSaveReturn {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const queryClient = useQueryClient()
 
   const saveFile = useCallback(
     async (fileId: string, content: string, language?: string): Promise<boolean> => {
@@ -53,6 +55,24 @@ export function useFileSave(options: UseFileSaveOptions = {}): UseFileSaveReturn
 
         if (!saveRes.ok) {
           throw new Error('Failed to save file')
+        }
+
+        // Update React Query cache for this file so subsequent selections
+        // see the latest content instead of a stale cached version.
+        try {
+          queryClient.setQueryData(
+            ['file', fileIdStr],
+            (old: any) => ({
+              id: old?.id ?? fileIdStr,
+              name: old?.name ?? options.workspaceFileName ?? '',
+              content,
+              // Preserve existing language if not provided
+              language: old?.language ?? null,
+            })
+          )
+        } catch (cacheError) {
+          // Cache update failure should not block save flow
+          console.error('Failed to update file cache after save:', cacheError)
         }
 
         // Sync to session if configured

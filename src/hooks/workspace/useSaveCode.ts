@@ -118,8 +118,8 @@ export function useSaveCode({
   }, [selectedFile])
 
   const handleSaveCode = useCallback(async () => {
-    if (!selectedFile || !sessionCode) {
-      console.warn('[useSaveCode] Cannot save: no file selected or session code')
+    if (!selectedFile) {
+      console.warn('[useSaveCode] Cannot save: no file selected')
       return
     }
 
@@ -136,7 +136,7 @@ export function useSaveCode({
     } else {
       console.error('[useSaveCode] Failed to save code')
     }
-  }, [selectedFile, code, language, sessionCode, saveFile])
+  }, [selectedFile, code, language, saveFile])
 
   const saveCurrentFile = useCallback(async (): Promise<boolean> => {
     if (!selectedFile) {

@@ -27,12 +27,15 @@ import { WorkspaceModeLayout } from './WorkspaceModeLayout'
 import { WorkspaceHeader } from './WorkspaceHeader'
 import { NoFileSelectedView } from './NoFileSelectedView'
 import { FileExplorerSidebar } from './FileExplorerSidebar'
+import { FileSwitchingOverlay } from './FileSwitchingOverlay'
 import { OutputPanelWrapper } from './OutputPanelWrapper'
 import { AIAssistantPanelWrapper } from './AIAssistantPanelWrapper'
 import { useExplorerData } from '@/hooks/workspace/useExplorerData'
 import { useWorkspaceData } from '@/hooks/workspace/useWorkspaceData'
 import { useFolderExplorerHandlers } from '@/hooks/workspace/useFolderExplorerHandlers'
 import { useFileSelection } from '@/hooks/workspace/useFileSelection'
+import { useSaveCode } from '@/hooks/workspace/useSaveCode'
+import { useSaveAndRun } from '@/hooks/workspace/useSaveAndRun'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { useWorkspaceImportExport } from '@/hooks/workspace/useWorkspaceImportExport'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
@@ -79,13 +82,16 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>(scopeFolderId ? 'workspace' : 'explorer')
   const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(scopeFolderId || null)
 
-  // File selection management (no autosave needed in standalone workspace)
+  const saveCurrentFileRef = useRef<(() => Promise<boolean>) | null>(null)
+
+  // File selection with auto-save before switch and loading state
   const {
     selectedFile,
     setSelectedFile: setHookSelectedFile,
     handleFileSelect: handleFileSelectFromExplorer,
     handleFileSelectFromModal,
     switchingFile,
+    loadingFile,
     refreshKey: hookRefreshKey,
     setRefreshKey: setHookRefreshKey,
   } = useFileSelection({
@@ -98,8 +104,30 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
         fileId: file.id
       })
     },
-    autoSaveBeforeSwitch: false,
+    autoSaveBeforeSwitch: true,
+    saveCurrentFile: async () => {
+      if (saveCurrentFileRef.current) return await saveCurrentFileRef.current()
+      return false
+    },
+    hasUnsavedChanges: () => selectedFile != null && code !== lastSavedCode,
   })
+
+  // Save code (workspace-only, no session sync)
+  const {
+    lastSavedCode,
+    saveCurrentFile,
+  } = useSaveCode({
+    selectedFile,
+    code,
+    language,
+    onSaveSuccess: () => {
+      invalidateWorkspaceData(queryClient, userId)
+      setHookRefreshKey((prev) => prev + 1)
+    },
+  })
+  useEffect(() => {
+    saveCurrentFileRef.current = saveCurrentFile
+  }, [saveCurrentFile])
 
   // Keep local refreshKey in sync with hook refreshKey for existing consumers
   // Also invalidate workspace cache when refreshKey changes
@@ -138,6 +166,14 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
   } = useWorkspaceCodeExecution({
     language,
     syncToSession: false,
+  })
+
+  // Save and run (same behavior as session: save if dirty then run, simultaneous)
+  const handleSaveAndRun = useSaveAndRun({
+    code,
+    lastSavedCode,
+    saveCurrentFile,
+    handleRun,
   })
 
   // Import/Export functionality
@@ -434,7 +470,15 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
         /* Workspace Mode */
         <WorkspaceModeLayout
           fileExplorer={
-            <FileExplorerSidebar>
+            <FileExplorerSidebar
+              loadingOverlay={
+                <FileSwitchingOverlay
+                  visible={true}
+                  message={switchingFile ? 'Saving current file...' : 'Loading file...'}
+                />
+              }
+              overlayVisible={switchingFile || loadingFile}
+            >
               <FileExplorer
                 onFileSelect={handleFileSelect}
                 selectedFileId={selectedFile?.id}
@@ -455,12 +499,13 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                 language={language}
                 onLanguageChange={setLanguage}
                 onChange={setCode}
-                onRun={handleRun}
+                onRun={handleSaveAndRun}
                 executing={executing}
                 executionResult={executionResult}
                 onSave={handleEditorSave}
                 readOnly={readOnly}
                 allowRunInReadOnly={readOnly}
+                runButtonLabel="Save and Run"
               />
             ) : (
               <NoFileSelectedView />
