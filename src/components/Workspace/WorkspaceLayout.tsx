@@ -205,7 +205,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
 
   // handleRun is provided by useWorkspaceCodeExecution hook
 
-  const handleFileSelect = useCallback((file: WorkspaceFile) => {
+  const handleFileSelect = useCallback((file: { id: string; name?: string; content?: string }) => {
     // Delegate to shared hook handler to keep behavior consistent
     void handleFileSelectFromExplorer(file)
   }, [handleFileSelectFromExplorer])
