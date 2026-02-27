@@ -6,8 +6,19 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // OneCompiler API via RapidAPI
 const ONECOMPILER_API = process.env.ONE_COMPILER_URL || 'https://onecompiler-apis.p.rapidapi.com/api/v1/run'
-const ONECOMPILER_KEY = process.env.ONE_COMPILER_KEY || ''
 const ONECOMPILER_HOST = process.env.ONE_COMPILER_HOST || 'onecompiler-apis.p.rapidapi.com'
+
+/** Parse ONE_COMPILER_KEY env: single key or comma-separated list → array of keys (trimmed, non-empty) */
+function getOneCompilerKeys(): string[] {
+  const raw = process.env.ONE_COMPILER_KEY || ''
+  if (!raw.trim()) return []
+  return raw.split(',').map((k) => k.trim()).filter(Boolean)
+}
+
+/** Pick a random key from the configured keys for load distribution */
+function pickRandomKey(keys: string[]): string {
+  return keys[Math.floor(Math.random() * keys.length)]!
+}
 
 // Language mapping for OneCompiler
 // Maps our language IDs to OneCompiler's language identifiers
@@ -86,8 +97,8 @@ const FILE_NAMES: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if API key is configured
-    if (!ONECOMPILER_KEY) {
+    const apiKeys = getOneCompilerKeys()
+    if (apiKeys.length === 0) {
       return NextResponse.json(
         { error: 'ONE_COMPILER_KEY not configured. Please add it to your .env file.' },
         { status: 500 },
@@ -106,13 +117,14 @@ export async function POST(request: NextRequest) {
 
     const oneCompilerLang = LANGUAGE_MAP[language] || language
     const fileName = FILE_NAMES[language] || 'main.txt'
+    const selectedKey = pickRandomKey(apiKeys)
 
-    // Make request to OneCompiler via RapidAPI
+    // Make request to OneCompiler via RapidAPI (random key from pool)
     const response = await fetch(ONECOMPILER_API, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-RapidAPI-Key': ONECOMPILER_KEY,
+        'X-RapidAPI-Key': selectedKey,
         'X-RapidAPI-Host': ONECOMPILER_HOST,
       },
       body: JSON.stringify({
