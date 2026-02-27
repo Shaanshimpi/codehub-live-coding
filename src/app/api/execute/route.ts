@@ -119,6 +119,13 @@ export async function POST(request: NextRequest) {
     const fileName = FILE_NAMES[language] || 'main.txt'
     const selectedKey = pickRandomKey(apiKeys)
 
+    // Log which key is selected (index + short prefix) without dumping full secrets
+    const selectedIndex = apiKeys.indexOf(selectedKey)
+    const maskedKey = selectedKey.slice(0, 6) + '...' // show only prefix
+    console.log(
+      `[OneCompiler] Using key #${selectedIndex + 1} of ${apiKeys.length}: ${maskedKey}`,
+    )
+
     // Make request to OneCompiler via RapidAPI (random key from pool)
     const response = await fetch(ONECOMPILER_API, {
       method: 'POST',
