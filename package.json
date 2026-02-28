@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "cross-env SKIP_PAYLOAD_MIGRATE=1 NODE_OPTIONS=--no-deprecation next build",
+    "build": "pnpm tsx scripts/clear-dev-migration.ts && cross-env SKIP_PAYLOAD_MIGRATE=1 NODE_OPTIONS=--no-deprecation next build",
     "postbuild": "next-sitemap --config next-sitemap.config.cjs",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "dev:prod": "cross-env NODE_OPTIONS=--no-deprecation rm -rf .next && pnpm build && pnpm start",
@@ -84,6 +84,7 @@
     "jsdom": "26.1.0",
     "playwright": "1.56.1",
     "playwright-core": "1.56.1",
+    "pg": "^8.13.0",
     "postcss": "^8.4.38",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.1.18",

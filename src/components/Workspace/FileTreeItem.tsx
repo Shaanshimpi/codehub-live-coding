@@ -182,8 +182,11 @@ export function FileTreeItem({
             {showMenu && fileMenuPosition && (
               <>
                 <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowMenu(false)}
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowMenu(false)
+                  }}
                 />
                 <div 
                   className="fixed z-20 w-40 rounded-md border bg-card shadow-lg"

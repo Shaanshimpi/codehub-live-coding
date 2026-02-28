@@ -39,7 +39,10 @@ export const Users: CollectionConfig = {
     defaultColumns: ['name', 'email', 'role'],
     useAsTitle: 'name',
   },
-  auth: true,
+  auth: {
+    verify: true,
+    tokenExpiration: process.env.NODE_ENV === 'production' ? 60 * 60 : 60 * 60 * 24, // 1 hour prod, 1 day dev
+  },
   fields: [
     {
       name: 'name',

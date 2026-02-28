@@ -548,8 +548,11 @@ function FolderCard({
             {showMenu && (
               <>
                 <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowMenu(false)}
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowMenu(false)
+                  }}
                 />
                 <div className="absolute right-0 top-6 z-20 w-40 rounded-md border bg-card shadow-lg">
                   <button
@@ -686,8 +689,11 @@ function FileCard({
             {showMenu && (
               <>
                 <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowMenu(false)}
+                  className="fixed inset-0 z-10 cursor-default"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setShowMenu(false)
+                  }}
                 />
                 <div className="absolute right-0 top-6 z-20 w-40 rounded-md border bg-card shadow-lg">
                   <button
