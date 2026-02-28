@@ -40,8 +40,8 @@ export function getDbAdapter() {
     // Skip running migrations during next build (avoids "already exists" when DB was set up via dev push)
     prodMigrations: process.env.SKIP_PAYLOAD_MIGRATE === '1' ? [] : migrations,
     // Disable dev push in production so we never get "dev mode" prompt when running migrations (e.g. on Vercel)
-    // push: process.env.NODE_ENV === 'production' ? false : undefined,
-    push: false,
+    push: process.env.NODE_ENV === 'production' ? false : undefined,
+    // push: false,
   })
 }
 
