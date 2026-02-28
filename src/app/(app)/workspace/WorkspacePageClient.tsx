@@ -1,29 +1,14 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 
 import { WorkspaceLayout } from '@/components/Workspace/WorkspaceLayout'
-import { PaymentBlocked } from '@/components/Payment/PaymentBlocked'
-import { FolderExplorerView } from '@/components/Workspace/FolderExplorerView'
-import type { Folder, WorkspaceFileWithFolder } from '@/types/workspace'
+import type { User } from '@/payload-types'
 
-type WorkspaceFile = WorkspaceFileWithFolder
-
-type PaymentStatus = {
-  isBlocked: boolean
-  reason?: string
-  nextInstallment?: {
-    dueDate: string
-    amount: number
-  }
-  daysOverdue?: number
-}
-
-export function WorkspacePageClient() {
-  // Use WorkspaceLayout which now has built-in Explorer/Workspace mode toggle
+export function WorkspacePageClient({ user }: { user: User }) {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <WorkspaceLayout />
+      <WorkspaceLayout user={user} />
     </div>
   )
 }

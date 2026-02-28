@@ -43,6 +43,8 @@ interface FolderExplorerViewProps {
   onItemChanged?: () => void
   /** Whether actions are read-only */
   readOnly?: boolean
+  /** Title for workspace (e.g. "John's workspace") when showing root */
+  workspaceTitle?: string
 }
 
 export const FolderExplorerView = React.memo(function FolderExplorerView({
@@ -60,6 +62,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
   allFolders = [],
   onItemChanged,
   readOnly = false,
+  workspaceTitle = 'My Workspace',
 }: FolderExplorerViewProps) {
   const breadcrumb = currentFolder ? buildFolderPathChain(currentFolder) : []
   const [showRenameModal, setShowRenameModal] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)
@@ -224,14 +227,14 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
                   onClick={() => onOpenFolder('')}
                   className="hover:text-foreground hover:underline transition-colors"
                 >
-                  My Workspace
+                  {workspaceTitle}
                 </button>
               ) : (
                 <Link
                   href="/workspace"
                   className="hover:text-foreground hover:underline transition-colors"
                 >
-                  My Workspace
+                  {workspaceTitle}
                 </Link>
               )}
               {breadcrumb.map((folder, index) => {
@@ -646,8 +649,20 @@ function FileCard({
   const [showMenu, setShowMenu] = useState(false)
 
   return (
-    <div className="group flex items-center justify-between rounded-md border bg-card px-3 py-1.5 text-xs" data-testid="file-item">
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+    <div
+      role="button"
+      tabIndex={0}
+      className="group flex items-center justify-between rounded-md border bg-card px-3 py-1.5 text-xs cursor-pointer hover:bg-accent/40 transition-colors"
+      data-testid="file-item"
+      onClick={() => !isDeleting && onOpenFile()}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !isDeleting) {
+          e.preventDefault()
+          onOpenFile()
+        }
+      }}
+    >
+      <div className="flex items-center gap-2 min-w-0 flex-1 pointer-events-none">
         {isDeleting ? (
           <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" />
         ) : (
@@ -655,7 +670,7 @@ function FileCard({
         )}
         <span className="truncate">{isDeleting ? 'Deleting...' : file.name}</span>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 pointer-events-auto">
         {!readOnly && !isDeleting && (
           <div className="relative">
             <button
@@ -714,7 +729,10 @@ function FileCard({
           </div>
         )}
         <button
-          onClick={onOpenFile}
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenFile()
+          }}
           disabled={isDeleting}
           className="ml-2 rounded-md border px-2 py-0.5 text-[10px] hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Open this file in Workspace editor view"

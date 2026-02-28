@@ -141,18 +141,24 @@ export function FileTreeItem({
 
     return (
       <div
+        role="button"
+        tabIndex={0}
         className={cn(
-          'group flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-accent transition-colors',
+          'group flex items-center gap-1.5 px-2 py-1 text-xs rounded hover:bg-accent transition-colors cursor-pointer',
           isSelected && 'bg-primary/10 text-primary font-medium'
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onClick={() => !deletingFileId && onFileClick(file)}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && !deletingFileId) {
+            e.preventDefault()
+            onFileClick(file)
+          }
+        }}
       >
-        <div
-          className="flex items-center gap-1.5 flex-1 cursor-pointer min-w-0"
-          onClick={() => !deletingFileId && onFileClick(file)}
-        >
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 pointer-events-none">
           {deletingFileId === file.id ? (
             <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-muted-foreground" />
           ) : (
@@ -161,7 +167,7 @@ export function FileTreeItem({
           <span className="truncate">{deletingFileId === file.id ? 'Deleting...' : file.name}</span>
         </div>
         {!readOnly && (onFileDelete || onFileRename || onFileMove) && isHovered && !deletingFileId && (
-          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="relative opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
             <button
               ref={fileMenuButtonRef}
               onClick={(e) => {

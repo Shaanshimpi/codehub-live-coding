@@ -34,6 +34,8 @@ export interface LiveCodePlaygroundProps {
   allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
   /** Run button label (e.g. "Save and Run" in session) */
   runButtonLabel?: string
+  /** When true, hide the language label in the toolbar (e.g. when parent shows file name + language) */
+  hideLanguageInToolbar?: boolean
 }
 
 export const SUPPORTED_LANGUAGES: Language[] = [

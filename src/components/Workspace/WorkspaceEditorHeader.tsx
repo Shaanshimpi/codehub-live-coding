@@ -93,16 +93,6 @@ export function WorkspaceEditorHeader({
   // Default save button text based on role
   const defaultSaveText = saveButtonText || (role === 'trainer' ? 'Save & Sync' : 'Save')
 
-  console.log('[WorkspaceEditorHeader] Rendering header', {
-    role,
-    fileName,
-    language,
-    savingCode,
-    saveSuccess,
-    showAI,
-    readOnly,
-  })
-
   return (
     <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5">
       <div className="flex items-center gap-2">
@@ -121,14 +111,8 @@ export function WorkspaceEditorHeader({
         {/* Language Selector */}
         <select
           value={language}
-          onChange={(e) => {
-            console.log('[WorkspaceEditorHeader] Language changed', {
-              oldLanguage: language,
-              newLanguage: e.target.value,
-            })
-            onLanguageChange(e.target.value)
-          }}
-          className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring"
+          onChange={(e) => onLanguageChange(e.target.value)}
+          className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
           disabled={readOnly}
         >
           {SUPPORTED_LANGUAGES.map((lang) => (
@@ -142,10 +126,7 @@ export function WorkspaceEditorHeader({
       <div className="flex items-center gap-2">
         {/* Save Button */}
         <button
-          onClick={() => {
-            console.log('[WorkspaceEditorHeader] Save button clicked')
-            onSave()
-          }}
+          onClick={() => onSave()}
           disabled={savingCode || readOnly}
           className={cn(
             'flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors',
@@ -175,13 +156,7 @@ export function WorkspaceEditorHeader({
 
         {/* AI Toggle Button */}
         <button
-          onClick={() => {
-            console.log('[WorkspaceEditorHeader] AI toggle clicked', {
-              currentState: showAI,
-              newState: !showAI,
-            })
-            onToggleAI()
-          }}
+          onClick={() => onToggleAI()}
           className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-1 text-xs hover:bg-accent transition-colors"
         >
           <Sparkles className="h-3 w-3" />

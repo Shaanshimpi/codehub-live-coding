@@ -43,6 +43,8 @@ interface FileExplorerProps {
    * This replaces the need for the key prop to force remounting.
    */
   refreshTrigger?: number
+  /** Title for the sidebar header (e.g. "John's workspace") when not scoped to a folder */
+  workspaceTitle?: string
 }
 
 export const FileExplorer = React.memo(function FileExplorer({
@@ -53,6 +55,7 @@ export const FileExplorer = React.memo(function FileExplorer({
   readOnly = false,
   rootFolderSlug,
   refreshTrigger,
+  workspaceTitle = 'My Workspace',
 }: FileExplorerProps) {
   const queryClient = useQueryClient()
   const { folders, files, isLoading, refetch } = useWorkspaceData(userId)
@@ -342,7 +345,7 @@ export const FileExplorer = React.memo(function FileExplorer({
       <div className="border-b bg-card px-3 py-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">
-            {scopedFolder ? scopedFolder.name || 'Folder' : 'My Workspace'}
+            {scopedFolder ? scopedFolder.name || 'Folder' : workspaceTitle}
           </h2>
           <button
             onClick={handleRefresh}

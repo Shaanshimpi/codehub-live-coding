@@ -23,6 +23,8 @@ interface WorkspaceEditorProps {
   allowRunInReadOnly?: boolean // Allow Run button to show even when readOnly is true
   /** Run button label (e.g. "Save and Run" in session) */
   runButtonLabel?: string
+  /** When true, hide the editor header (file name, language) - use when parent shows WorkspaceEditorHeader */
+  hideHeader?: boolean
 }
 
 export function WorkspaceEditor({
@@ -41,6 +43,7 @@ export function WorkspaceEditor({
   executionResult = null,
   allowRunInReadOnly = false,
   runButtonLabel,
+  hideHeader = false,
 }: WorkspaceEditorProps) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -112,47 +115,48 @@ export function WorkspaceEditor({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{fileName}</span>
-          <span className="text-xs text-muted-foreground">({monacoLanguage})</span>
-          <select
-            value={language}
-            onChange={(e) => onLanguageChange(e.target.value)}
-            disabled={readOnly}
-            className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-          >
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.id} value={lang.id}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        {!readOnly && !hideSaveButton && (
+      {!hideHeader && (
+        <div className="flex items-center justify-between border-b bg-card px-4 py-2">
           <div className="flex items-center gap-2">
-            {saveSuccess && (
-              <div className="flex items-center gap-1.5 rounded-md bg-success/20 px-2 py-1 text-xs text-success">
-                <CheckCircle className="h-3 w-3" />
-                <span>Saved</span>
-              </div>
-            )}
-            {hasChanges && !saveSuccess && (
-              <span className="text-xs text-muted-foreground">Unsaved changes</span>
-            )}
-            <button
-              onClick={handleManualSave}
-              disabled={saving || !hasChanges}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Save (Ctrl+S)"
+            <span className="text-sm font-medium">{fileName}</span>
+            <span className="text-xs text-muted-foreground">({monacoLanguage})</span>
+            <select
+              value={language}
+              onChange={(e) => onLanguageChange(e.target.value)}
+              disabled={readOnly}
+              className="ml-2 rounded-md border bg-background px-2 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 cursor-pointer"
             >
-              <Save className="h-3 w-3" />
-              {saving ? 'Saving...' : 'Save'}
-            </button>
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.name}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-      </div>
+          {!readOnly && !hideSaveButton && (
+            <div className="flex items-center gap-2">
+              {saveSuccess && (
+                <div className="flex items-center gap-1.5 rounded-md bg-success/20 px-2 py-1 text-xs text-success">
+                  <CheckCircle className="h-3 w-3" />
+                  <span>Saved</span>
+                </div>
+              )}
+              {hasChanges && !saveSuccess && (
+                <span className="text-xs text-muted-foreground">Unsaved changes</span>
+              )}
+              <button
+                onClick={handleManualSave}
+                disabled={saving || !hasChanges}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                title="Save (Ctrl+S)"
+              >
+                <Save className="h-3 w-3" />
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Editor */}
       <div className="flex-1 overflow-hidden">
@@ -169,6 +173,7 @@ export function WorkspaceEditor({
           runDisabled={runDisabled}
           allowRunInReadOnly={allowRunInReadOnly}
           runButtonLabel={runButtonLabel}
+          hideLanguageInToolbar={hideHeader}
         />
       </div>
     </div>

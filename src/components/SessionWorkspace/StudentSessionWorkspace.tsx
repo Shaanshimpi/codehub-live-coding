@@ -763,6 +763,7 @@ export function StudentSessionWorkspace({
                       executionResult={executionResult}
                       onSave={() => setRefreshKey((prev) => prev + 1)}
                       hideSaveButton={true}
+                      hideHeader={true}
                       runDisabled={false}
                       runButtonLabel="Save and Run"
                     />

@@ -39,12 +39,24 @@ import { useSaveAndRun } from '@/hooks/workspace/useSaveAndRun'
 import { useWorkspaceCodeExecution } from '@/hooks/workspace/useWorkspaceCodeExecution'
 import { useWorkspaceImportExport } from '@/hooks/workspace/useWorkspaceImportExport'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
+import type { User } from '@/payload-types'
 
 type WorkspaceFile = WorkspaceFileWithContent
+
+/** Derive "firstName's workspace" from user name, or fallback */
+function workspaceLabel(user?: User | null): string {
+  if (user?.name?.trim()) {
+    const firstName = user.name.trim().split(/\s+/)[0]
+    return `${firstName}'s workspace`
+  }
+  return 'Workspace'
+}
 
 interface WorkspaceLayoutProps {
   userId?: string | number
   readOnly?: boolean
+  /** Current user (for label e.g. "John's workspace") */
+  user?: User | null
   /**
    * Optional folder ID that defines the root of the visible workspace subtree.
    * When provided, only this folder and its descendants are shown in the tree.
@@ -52,7 +64,8 @@ interface WorkspaceLayoutProps {
   scopeFolderId?: string | number
 }
 
-export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: WorkspaceLayoutProps = {}) {
+export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId, user }: WorkspaceLayoutProps = {}) {
+  const workspaceTitle = workspaceLabel(user)
   const queryClient = useQueryClient()
   const router = useRouter()
   const [navigatingToJoin, setNavigatingToJoin] = useState(false)
@@ -312,7 +325,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                       href="/workspace"
                       className="hover:text-foreground hover:underline transition-colors truncate"
                     >
-                      Workspace
+                      {workspaceTitle}
                     </Link>
                     {scopedBreadcrumb.map((folder, index) => {
                       const isLast = index === scopedBreadcrumb.length - 1
@@ -336,7 +349,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                     })}
                   </div>
                 ) : (
-                  <span className="text-sm text-muted-foreground">Workspace</span>
+                  <span className="text-sm text-muted-foreground">{workspaceTitle}</span>
                 )}
               </div>
             </>
@@ -464,6 +477,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
             onOpenFolderInWorkspace={handleOpenFolderInWorkspace}
             onItemChanged={handleItemChanged}
             readOnly={readOnly}
+            workspaceTitle={workspaceTitle}
           />
         </div>
       ) : (
@@ -487,6 +501,7 @@ export function WorkspaceLayout({ userId, readOnly = false, scopeFolderId }: Wor
                 readOnly={readOnly}
                 rootFolderSlug={currentFolderId ? String(currentFolderId) : undefined}
                 refreshTrigger={refreshKey}
+                workspaceTitle={workspaceTitle}
               />
             </FileExplorerSidebar>
           }

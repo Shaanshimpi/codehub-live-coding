@@ -23,8 +23,10 @@ export function LiveCodePlayground({
   runDisabled = false,
   allowRunInReadOnly = false,
   runButtonLabel = 'Run',
+  hideLanguageInToolbar = false,
 }: LiveCodePlaygroundProps) {
   const editorRef = useRef<any>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const executedCodeRef = useRef<string>('') // Track the code that was executed
   const runHandlerRef = useRef<() => void>(() => {})
   const [showInput, setShowInput] = useState(false)
@@ -98,6 +100,24 @@ export function LiveCodePlayground({
       })
     }
   }, [readOnly, executing, handleRun, monaco, allowRunInReadOnly, runDisabled])
+
+  // Fallback: document-level Ctrl+Enter when focus is inside this playground (editor or input)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const target = e.target as Node
+        if (containerRef.current?.contains(target)) {
+          const { readOnly: ro, allowRunInReadOnly: allow, executing: ex, runDisabled: dis } = runGuardRef.current
+          if ((!ro || allow) && !ex && !dis) {
+            e.preventDefault()
+            runHandlerRef.current()
+          }
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [])
 
   const handleStop = useCallback(() => {
     if (onStopExecution) {
@@ -306,14 +326,15 @@ export function LiveCodePlayground({
   }, [monaco]) // Only set up once when monaco is available
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden">
+    <div ref={containerRef} className="flex h-full w-full flex-col overflow-hidden">
       {/* Controls Bar */}
       <div className="flex items-center justify-between border-b bg-muted/30 px-3 py-2">
         <div className="flex items-center gap-2">
-          {/* Language Label */}
-          <span className="text-xs font-medium text-muted-foreground">
-            {currentLanguage?.name || 'Unknown'}
-          </span>
+          {!hideLanguageInToolbar && (
+            <span className="text-xs font-medium text-muted-foreground">
+              {currentLanguage?.name || 'Unknown'}
+            </span>
+          )}
 
           {readOnly && (
             <span className="rounded-md bg-warning/20 px-2 py-0.5 text-[10px] font-medium text-warning">
@@ -413,7 +434,16 @@ export function LiveCodePlayground({
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Enter program input (stdin)..."
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                const { readOnly: ro, allowRunInReadOnly: allow, executing: ex, runDisabled: dis } = runGuardRef.current
+                if ((!ro || allow) && !ex && !dis) {
+                  e.preventDefault()
+                  runHandlerRef.current()
+                }
+              }
+            }}
+            placeholder="Enter program input (stdin). Ctrl+Enter to run."
             className="w-full resize-none rounded-md border bg-background px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring"
             rows={3}
             disabled={readOnly && !allowRunInReadOnly}
