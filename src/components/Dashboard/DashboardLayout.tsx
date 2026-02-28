@@ -24,18 +24,24 @@ export function DashboardLayout({ children, user }: DashboardLayoutProps) {
   const handleLogout = async () => {
     try {
       // Call Payload logout endpoint
-      await fetch('/api/users/logout', {
+      const res = await fetch('/api/users/logout', {
         method: 'POST',
         credentials: 'include',
       })
+      // If already unauthenticated (e.g. session expired), go to login
+      if (res.status === 401) {
+        router.push('/admin/login')
+        router.refresh()
+        return
+      }
       // Clear any client-side state and redirect to home
       router.push('/')
       router.refresh()
     } catch (error) {
       console.error('Logout error:', error)
-      // Even if API fails, try to clear cookie and redirect
+      // Even if API fails, try to clear cookie and redirect to login
       document.cookie = 'payload-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-      router.push('/')
+      router.push('/admin/login')
       router.refresh()
     }
   }

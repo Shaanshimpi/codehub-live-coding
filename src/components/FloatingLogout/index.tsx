@@ -47,14 +47,24 @@ export function FloatingLogout() {
   }, [theme])
 
   const handleLogout = async () => {
+    if (!isLoggedIn) {
+      router.push('/admin/login')
+      return
+    }
     setIsLoading(true)
     try {
       // Call Payload logout endpoint
-      await fetch('/api/users/logout', {
+      const res = await fetch('/api/users/logout', {
         method: 'POST',
         credentials: 'include',
       })
 
+      // If already unauthenticated (e.g. session expired), go to login
+      if (res.status === 401) {
+        router.push('/admin/login')
+        router.refresh()
+        return
+      }
       // Clear any client-side state and redirect to home
       router.push('/')
       router.refresh()

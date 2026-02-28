@@ -26,6 +26,7 @@ export function LiveCodePlayground({
 }: LiveCodePlaygroundProps) {
   const editorRef = useRef<any>(null)
   const executedCodeRef = useRef<string>('') // Track the code that was executed
+  const runHandlerRef = useRef<() => void>(() => {})
   const [showInput, setShowInput] = useState(false)
   const [input, setInput] = useState('')
   const [fontSize, setFontSize] = useState<number>(14)
@@ -39,6 +40,7 @@ export function LiveCodePlayground({
   const currentLanguage = SUPPORTED_LANGUAGES.find((lang) => lang.id === language)
   const monacoLanguage = currentLanguage?.monacoLanguage || 'javascript'
 
+  // Single run handler: used by both Run button and Ctrl+Enter (via ref so keybinding always has latest)
   const handleRun = useCallback(() => {
     if (runDisabled) return // Prevent running if disabled
     // Get current code from editor to avoid stale state
@@ -48,17 +50,25 @@ export function LiveCodePlayground({
     onRun(currentCode, showInput ? input : undefined)
   }, [code, input, showInput, onRun, runDisabled])
 
+  useEffect(() => {
+    runHandlerRef.current = handleRun
+  }, [handleRun])
+
+  const runGuardRef = useRef({ readOnly, allowRunInReadOnly, executing, runDisabled })
+  runGuardRef.current = { readOnly, allowRunInReadOnly, executing, runDisabled }
+
   const handleEditorDidMount = useCallback((editor: any) => {
     editorRef.current = editor
 
-      // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter to run code
+      // Add keyboard shortcut: Ctrl+Enter or Cmd+Enter — call same run handler as button (via ref)
       if (monaco) {
         editor.addCommand(
           // eslint-disable-next-line no-bitwise
           (monaco as any).KeyMod.CtrlCmd | (monaco as any).KeyCode.Enter,
           () => {
-            if ((!readOnly || allowRunInReadOnly) && !executing && !runDisabled) {
-              handleRun()
+            const { readOnly: ro, allowRunInReadOnly: allow, executing: ex, runDisabled: dis } = runGuardRef.current
+            if ((!ro || allow) && !ex && !dis) {
+              runHandlerRef.current()
             }
           },
         )

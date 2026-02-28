@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { FileExplorer } from '@/components/Workspace/FileExplorer'
 import { WorkspaceEditor } from '@/components/Workspace/WorkspaceEditor'
 import { OutputPanel } from '@/components/LiveCodePlayground/OutputPanel'
@@ -26,7 +27,7 @@ import { SUPPORTED_LANGUAGES } from '@/components/LiveCodePlayground/types'
 import { inferLanguageFromFileName } from '@/utilities/languageInference'
 import { WorkspaceViewControls } from '@/components/Workspace/WorkspaceViewControls'
 import { ViewToggleButton } from '@/components/Workspace/ViewToggleButton'
-import { Radio, Eye, File, ArrowLeft, Bell, RefreshCw, Terminal } from 'lucide-react'
+import { Radio, Eye, File, ArrowLeft, Bell, RefreshCw, Terminal, LogOut, Loader2 } from 'lucide-react'
 import { cn } from '@/utilities/ui'
 import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
@@ -65,9 +66,11 @@ export function StudentSessionWorkspace({
   sessionTitle,
   sessionActive,
 }: StudentSessionWorkspaceProps) {
+  const router = useRouter()
   // Tab state
   const [activeTab, setActiveTab] = useState<ActiveTab>('trainer')
   const [hasNewTrainerUpdate, setHasNewTrainerUpdate] = useState(false)
+  const [leavingSession, setLeavingSession] = useState(false)
 
   // Trainer&apos;s file (read-only)
   const [trainerFile, setTrainerFile] = useState<WorkspaceFile | null>(null)
@@ -84,7 +87,7 @@ export function StudentSessionWorkspace({
   const [showAI, setShowAI] = useState(false)
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
-  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('workspace')
+  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('explorer')
   const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(null)
   const [refreshingTrainerCode, setRefreshingTrainerCode] = useState(false)
   const [showFileModal, setShowFileModal] = useState(false)
@@ -334,13 +337,8 @@ export function StudentSessionWorkspace({
           signal: abortController.signal 
         })
         if (res.ok) {
-          const data = await res.json()
-          // Check if student has a saved workspace file in their scratchpad
-          // This would be in studentScratchpads, but we'll check on first sync
-          // For now, show modal if no file selected
-          if (!selectedFile) {
-            setShowFileModal(true)
-          }
+          await res.json()
+          // Stay in explorer by default; do not auto-open file selection modal on join
         }
       } catch (error) {
         // Ignore cancellation errors (from AbortController or manual cancellation)
@@ -348,7 +346,7 @@ export function StudentSessionWorkspace({
           return
         }
         console.error('Failed to load active file:', error)
-        setShowFileModal(true)
+        // Do not auto-open modal on join; user can pick file from explorer or open modal manually
       }
     }
     
@@ -421,6 +419,22 @@ export function StudentSessionWorkspace({
     }
   }
 
+  const handleLeaveSession = useCallback(async () => {
+    if (leavingSession) return
+    setLeavingSession(true)
+    try {
+      await fetch(`/api/sessions/${sessionCode}/leave`, {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => {
+        // Ignore network errors; leaving UI should still navigate away
+      })
+    } finally {
+      router.push('/workspace')
+      setLeavingSession(false)
+    }
+  }, [leavingSession, router, sessionCode])
+
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden">
       {/* Session Header */}
@@ -481,6 +495,25 @@ export function StudentSessionWorkspace({
                 <span>Last update: {lastUpdate.toLocaleTimeString()}</span>
               </div>
             )}
+            <button
+              type="button"
+              onClick={handleLeaveSession}
+              disabled={leavingSession}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors",
+                leavingSession
+                  ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+                  : "bg-background hover:bg-accent"
+              )}
+              title="Leave session"
+            >
+              {leavingSession ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <LogOut className="h-3 w-3" />
+              )}
+              <span>{leavingSession ? 'Leaving...' : 'Leave session'}</span>
+            </button>
             {!sessionActive && (
               <Link
                 href="/workspace"

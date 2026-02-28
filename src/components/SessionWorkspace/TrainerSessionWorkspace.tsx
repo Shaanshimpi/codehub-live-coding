@@ -80,7 +80,7 @@ export function TrainerSessionWorkspace({
   const [showStudents, setShowStudents] = useState(false)
   const [showFileExplorer, setShowFileExplorer] = useState(true)
   const [showOutput, setShowOutput] = useState(true)
-  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('workspace')
+  const [workspaceMode, setWorkspaceMode] = useState<'explorer' | 'workspace'>('explorer')
   const [currentFolderId, setCurrentFolderId] = useState<string | number | null>(null)
   const [showFileModal, setShowFileModal] = useState(false)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
@@ -247,18 +247,13 @@ export function TrainerSessionWorkspace({
             if (fileData.language) {
               setLanguage(fileData.language)
             }
-          } else {
-            // File fetch failed - show modal
-            setShowFileModal(true)
           }
-        } else {
-          // No file selected - show modal
-          setShowFileModal(true)
+          // If file fetch failed or no file in session: stay in explorer, do not auto-open modal
         }
+        // If no file in session: stay in explorer, do not auto-open modal
       } catch (error) {
         console.error('Failed to load active file:', error)
-        // Show modal if load fails - file might not exist or user doesn't have access
-        setShowFileModal(true)
+        // Stay in explorer on load failure; user can pick a file from explorer or open modal manually
       }
     }
     loadActiveFile()
