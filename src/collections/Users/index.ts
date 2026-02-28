@@ -40,7 +40,6 @@ export const Users: CollectionConfig = {
     useAsTitle: 'name',
   },
   auth: {
-    verify: true,
     tokenExpiration: process.env.NODE_ENV === 'production' ? 60 * 60 : 60 * 60 * 24, // 1 hour prod, 1 day dev
   },
   fields: [
