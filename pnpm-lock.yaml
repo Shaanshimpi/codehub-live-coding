@@ -150,6 +150,9 @@ importers:
       '@types/node':
         specifier: 22.5.4
         version: 22.5.4
+      '@types/pg':
+        specifier: ^8.11.6
+        version: 8.18.0
       '@types/react':
         specifier: 19.2.1
         version: 19.2.1
@@ -2220,6 +2223,9 @@ packages:
 
   '@types/pg@8.10.2':
     resolution: {integrity: sha512-MKFs9P6nJ+LAeHLU3V0cODEOgyThJ3OAnmOlsZsxux6sfQs3HRXR5bBn7xG5DjckEFhTAxsXi7k7cd0pCMxpJw==}
+
+  '@types/pg@8.18.0':
+    resolution: {integrity: sha512-gT+oueVQkqnj6ajGJXblFR4iavIXWsGAFCk3dP4Kki5+a9R4NMt0JARdk6s8cUKcfUoqP5dAtDSLU8xYUTFV+Q==}
 
   '@types/prismjs@1.26.5':
     resolution: {integrity: sha512-AUZTa7hQ2KY5L7AmtSiqxlhWxb4ina0yd8hNbl4TWuqnv/pFP0nDMb3YrfSBf4hJVGLh2YEIBfKaBW/9UEl6IQ==}
@@ -7259,6 +7265,12 @@ snapshots:
       '@types/node': 22.5.4
       pg-protocol: 1.11.0
       pg-types: 4.1.0
+
+  '@types/pg@8.18.0':
+    dependencies:
+      '@types/node': 22.5.4
+      pg-protocol: 1.11.0
+      pg-types: 2.2.0
 
   '@types/prismjs@1.26.5': {}
 
