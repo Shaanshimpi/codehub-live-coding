@@ -34,6 +34,7 @@ export default buildConfig({
     },
     components: {
       beforeLogin: ['@/components/BeforeLogin'],
+      afterLogin: ['@/components/LoginShowPasswordToggle'],
       beforeDashboard: ['@/components/BeforeDashboard'],
       graphics: {
         Logo: '@/components/Logo/Logo#Logo',

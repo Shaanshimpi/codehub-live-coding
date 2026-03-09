@@ -55,7 +55,7 @@ export const FileExplorer = React.memo(function FileExplorer({
   readOnly = false,
   rootFolderSlug,
   refreshTrigger,
-  workspaceTitle = 'My Workspace',
+  workspaceTitle = 'Workspace',
 }: FileExplorerProps) {
   const queryClient = useQueryClient()
   const { folders, files, isLoading, refetch } = useWorkspaceData(userId)

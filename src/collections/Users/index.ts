@@ -40,7 +40,7 @@ export const Users: CollectionConfig = {
     useAsTitle: 'name',
   },
   auth: {
-    tokenExpiration: process.env.NODE_ENV === 'production' ? 60 * 60 : 60 * 60 * 24, // 1 hour prod, 1 day dev
+    tokenExpiration: process.env.NODE_ENV === 'production' ? 2 * 60 * 60 : 60 * 60 * 24, // 1 hour prod, 1 day dev
   },
   fields: [
     {
@@ -196,17 +196,17 @@ export const Users: CollectionConfig = {
           // Always set to student for public signups, regardless of what was sent
           data.role = 'student'
         }
-        
+
         // Auto-set trial dates for new students
         if (operation === 'create' && data.role === 'student') {
           const now = new Date()
           const trialDays = 7 // Default 7 days, can be fetched from Platform Settings if needed
-          
+
           // Set trial start date to now if not provided
           if (!data.trialStartDate) {
             data.trialStartDate = now.toISOString()
           }
-          
+
           // Set trial end date to 7 days from now if not provided
           if (!data.trialEndDate) {
             const trialEndDate = new Date(now)
@@ -214,7 +214,7 @@ export const Users: CollectionConfig = {
             data.trialEndDate = trialEndDate.toISOString()
           }
         }
-        
+
         return data
       },
     ],

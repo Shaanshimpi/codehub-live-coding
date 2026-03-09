@@ -5,6 +5,25 @@ import Link from 'next/link'
 import { FolderOpen, PlayCircle, Radio, Monitor, LayoutDashboard } from 'lucide-react'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 
+export function HomePageTitleClient() {
+  const { user, isLoading } = useCurrentUser()
+
+  if (isLoading) {
+    return <>CodeHub</>
+  }
+
+  if (user?.name?.trim()) {
+    const firstName = user.name.trim().split(/\s+/)[0]
+    return (
+      <>
+        Hi, {firstName} <br /> Welcome to CodeHub
+      </>
+    )
+  }
+
+  return <>CodeHub</>
+}
+
 export function HomePageClient() {
   const { user, isLoading: loading, refetch } = useCurrentUser()
 
@@ -24,7 +43,8 @@ export function HomePageClient() {
     }
   }, [refetch])
 
-  const isTrainerOrAdmin = user?.role === 'trainer' || user?.role === 'admin' || user?.role === 'manager'
+  const isTrainerOrAdmin =
+    user?.role === 'trainer' || user?.role === 'admin' || user?.role === 'manager'
   const isStaff = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'trainer'
 
   const buttonBase =
@@ -100,4 +120,3 @@ export function HomePageClient() {
     </div>
   )
 }
-

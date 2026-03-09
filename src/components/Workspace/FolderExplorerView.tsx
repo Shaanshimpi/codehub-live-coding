@@ -62,7 +62,7 @@ export const FolderExplorerView = React.memo(function FolderExplorerView({
   allFolders = [],
   onItemChanged,
   readOnly = false,
-  workspaceTitle = 'My Workspace',
+  workspaceTitle = 'Workspace',
 }: FolderExplorerViewProps) {
   const breadcrumb = currentFolder ? buildFolderPathChain(currentFolder) : []
   const [showRenameModal, setShowRenameModal] = useState<{ type: 'file' | 'folder'; id: string; name: string } | null>(null)

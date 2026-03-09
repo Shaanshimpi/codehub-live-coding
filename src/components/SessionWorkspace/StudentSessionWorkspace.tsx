@@ -33,6 +33,7 @@ import { FileSelectionModal } from '@/components/Session/FileSelectionModal'
 import type { BasicFolderRef } from '@/utilities/workspaceScope'
 import { buildFolderPathChain } from '@/utilities/workspaceScope'
 import type { WorkspaceFileWithContent } from '@/types/workspace'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 type WorkspaceFile = WorkspaceFileWithContent
 
@@ -59,6 +60,35 @@ interface StudentSessionWorkspaceProps {
   sessionCode: string
   sessionTitle: string
   sessionActive: boolean
+}
+
+type BasicUserLike = {
+  name?: string | null
+  email?: string | null
+} | null | undefined
+
+function firstNameOrLocalPart(user: BasicUserLike): string | null {
+  if (user?.name?.trim()) {
+    const firstName = user.name.trim().split(/\s+/)[0]
+    return firstName
+  }
+  if (user?.email) {
+    const localPart = user.email.split('@')[0]
+    if (localPart) return localPart
+  }
+  return null
+}
+
+function workspaceTitleFromUser(user: BasicUserLike): string {
+  const base = firstNameOrLocalPart(user)
+  if (base) return `${base}'s workspace`
+  return 'Workspace'
+}
+
+function codeTabLabelFromUser(user: BasicUserLike): string {
+  const base = firstNameOrLocalPart(user)
+  if (base) return `${base}'s code`
+  return 'My Code'
 }
 
 export function StudentSessionWorkspace({
@@ -93,6 +123,9 @@ export function StudentSessionWorkspace({
   const [showFileModal, setShowFileModal] = useState(false)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   const [activeFileName, setActiveFileName] = useState<string>('')
+  const { user } = useCurrentUser()
+  const workspaceTitle = workspaceTitleFromUser(user)
+  const codeTabLabel = codeTabLabelFromUser(user)
 
   // Refs for saveCurrentFile to avoid circular dependency
   const saveCurrentFileRef = useRef<(() => Promise<boolean>) | null>(null)
@@ -561,7 +594,7 @@ export function StudentSessionWorkspace({
           )}
         >
           <File className="h-3 w-3" />
-          My Code
+          {codeTabLabel}
         </button>
       </div>
 
@@ -683,6 +716,7 @@ export function StudentSessionWorkspace({
                     error={explorerError}
                     isRoot={!currentFolder}
                     allFolders={explorerFolders}
+                    workspaceTitle={workspaceTitle}
                     onOpenFolder={(folderId) => {
                       if (folderId === '') {
                         setCurrentFolderId(null) // Go to root
@@ -734,6 +768,7 @@ export function StudentSessionWorkspace({
                     onFileSaved={() => setRefreshKey((prev) => prev + 1)}
                     rootFolderSlug={currentFolderId ? String(currentFolderId) : undefined}
                     readOnly={false}
+                    workspaceTitle={workspaceTitle}
                   />
                 </FileExplorerSidebar>
               }

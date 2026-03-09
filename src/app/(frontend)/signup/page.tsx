@@ -5,6 +5,50 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Code, Mail, Lock, User, Phone, Calendar, GraduationCap, MapPin, ChevronRight, ChevronLeft } from 'lucide-react'
 
+const EyeIcon: React.FC = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    className="h-4 w-4"
+  >
+    <path
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M2.25 12s2.25-6.75 9.75-6.75S21.75 12 21.75 12 19.5 18.75 12 18.75 2.25 12 2.25 12Z"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+  </svg>
+)
+
+const EyeOffIcon: React.FC = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    className="h-4 w-4"
+  >
+    <path
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 3l18 18M10.584 10.587A3 3 0 0 0 13.41 13.41M9.88 4.36A8.218 8.218 0 0 1 12 4.25C19.5 4.25 21.75 11 21.75 11S20.91 13.58 18.75 15.75M6.51 6.51C3.96 8.02 2.25 11 2.25 11S4.5 17.75 12 17.75c1.33 0 2.51-.23 3.54-.64"
+    />
+  </svg>
+)
+
 function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -31,6 +75,7 @@ function SignupForm() {
     postalCode: '',
     country: '',
   })
+  const [passwordVisible, setPasswordVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [stepErrors, setStepErrors] = useState<Record<number, string>>({})
@@ -265,14 +310,27 @@ function SignupForm() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   id="password"
-                  type="password"
+                  type={passwordVisible ? 'text' : 'password'}
                   required
                   minLength={8}
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      password: e.target.value,
+                    })
+                  }
                   placeholder="At least 8 characters"
-                  className="w-full pl-10 pr-4 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full pl-10 pr-10 py-2 border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+                <button
+                  type="button"
+                  onClick={() => setPasswordVisible((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center text-muted-foreground hover:text-foreground focus:outline-none"
+                  aria-label={passwordVisible ? 'Hide password' : 'Show password'}
+                >
+                  {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
               </div>
             </div>
 

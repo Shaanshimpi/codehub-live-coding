@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Code } from 'lucide-react'
-import { HomePageClient } from './page-client'
+import { HomePageClient, HomePageTitleClient } from './page-client'
 
 export const metadata: Metadata = {
   title: 'CodeHub - Live Coding Platform',
@@ -14,8 +14,10 @@ export default function HomePage() {
         {/* Hero Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-center gap-3">
-            <Code className="h-12 w-12 text-primary" />
-            <h1 className="text-5xl font-bold">CodeHub</h1>
+            {/* <Code className="h-12 w-12 text-primary" /> */}
+            <h1 className="text-5xl font-bold">
+              <HomePageTitleClient />
+            </h1>
           </div>
           <p className="text-xl text-muted-foreground">
             Live Coding Platform for Interactive Learning
